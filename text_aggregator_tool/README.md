@@ -32,7 +32,7 @@ ta -s | code -
 
 ### Prerequisites
 
-You need `python3` and `pip` installed.
+You need `python3` (3.8+) and `pip` installed.
 
 For Linux users (especially headless servers), you also need `xclip` or `xsel` for clipboard functionality:
 ```bash

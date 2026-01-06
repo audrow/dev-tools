@@ -11,7 +11,7 @@ authors = [
 license = {text = "MIT"}
 description = "A tool to restart a command when git-tracked files change."
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 dependencies = []
 classifiers = [
     "Programming Language :: Python :: 3",
