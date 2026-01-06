@@ -145,8 +145,11 @@ You need to run a small script on your **local machine** that listens for the re
 
 **Run it:**
 ```bash
+# Default (Listens on 9999, Refreshes localhost:8080)
 python3 mac_listener.py
-# Output: Listening on port 9999...
+
+# Custom App Port (if your app is on 3000)
+python3 mac_listener.py --app-port 3000
 ```
 
 ### 2. Connect via SSH
