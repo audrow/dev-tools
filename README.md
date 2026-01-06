@@ -1,4 +1,4 @@
-# Internal Developer Tools
+# Developer Tools
 
 This repository is a collection of tools to support and streamline development workflows.
 
