@@ -50,7 +50,7 @@ def aggregate_text(
             print("Warning: Could not copy to clipboard. `xclip` or `xsel` may not be installed.")
         return aggregated_text
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Aggregate text from files.")
     parser.add_argument("path_pattern", type=str, help="The path pattern to search for files (e.g., \"**/*.txt\").")
     parser.add_argument("--include-extensions", nargs="*", help="A list of file extensions to include (e.g., \".txt\" \".md\").")
@@ -68,3 +68,6 @@ if __name__ == "__main__":
 
     if result:
         print(result)
+
+if __name__ == "__main__":
+    main()

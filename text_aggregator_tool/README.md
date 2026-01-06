@@ -1,80 +1,100 @@
 # Text Aggregator
 
-A simple text aggregator that takes a path (supports wildcards `**` and `*`) and file extensions to include or exclude (optional) and puts all of the text in either a file or to the user's clipboard (clipboard by default).
+A simple text aggregator that takes a path (supports wildcards `**` and `*`) and file extensions to include or exclude, and puts all of the text into either a file or the user's clipboard (clipboard by default).
 
-## Installation for Shell Command (Managed Environments)
+## Installation
 
-To use this tool as a standalone shell command, follow these steps. This is the recommended method for systems with managed Python environments that prevent global `pip` installs.
+### Prerequisites
 
-### 1. Install Dependencies
+You need `python3` and `pip` installed.
 
-The tool requires `pyperclip`. Install it using your system's package manager:
-
+For Linux users (especially headless servers), you also need `xclip` or `xsel` for clipboard functionality:
 ```bash
-sudo apt-get update && sudo apt-get install -y python3-pyperclip xclip
-```
-*Note: `xclip` is needed for clipboard functionality on headless or minimal systems.*
-
-### 2. Make the Script Executable
-
-Make the core `aggregator.py` script runnable:
-
-```bash
-chmod +x text_aggregator/aggregator.py
+sudo apt-get install -y xclip
 ```
 
-### 3. Move to a Directory in your PATH
+### Install with pip
 
-Move the script to a common location for user-installed executables and rename it for easier use. `/usr/local/bin` is a standard choice.
+You can install the tool directly from the source code.
+
+#### User Installation (Recommended)
+This installs the `text-aggregator` command to your local bin directory (usually `~/.local/bin`). Ensure this is in your PATH.
 
 ```bash
-sudo mv text_aggregator/aggregator.py /usr/local/bin/text-aggregator
+pip install .
 ```
 
-You can now run the tool from anywhere in your shell.
-
-## Usage (as Shell Command)
+#### Developer Installation
+If you want to modify the code, install in editable mode:
 
 ```bash
-# Aggregate all .txt files and copy the result to the clipboard
+pip install -e .
+```
+
+## Usage
+
+Once installed, you can use the `text-aggregator` command from your terminal.
+
+### Basic Usage
+
+Aggregate all `.txt` files in the current directory and subdirectories, and copy the content to your clipboard:
+```bash
 text-aggregator "**/*.txt"
+```
+*Note: The aggregated text is also printed to standard output.*
 
-# Aggregate specific file types and save to a file
-text-aggregator "**/*" --include-extensions ".py" ".md" --output-file "code.txt"
+### Options
 
-# Exclude certain file types
-text-aggregator "**/*" --exclude-extensions ".log" ".tmp"
+| Option | Description | Example |
+| :--- | :--- | :--- |
+| `path_pattern` | **Required.** Glob pattern to match files. | `"src/**/*.py"` |
+| `--include-extensions` | List of extensions to include. | `--include-extensions .py .md` |
+| `--exclude-extensions` | List of extensions to exclude. | `--exclude-extensions .log .tmp` |
+| `--output-file` | Write output to a file instead of clipboard/stdout. | `--output-file combined.txt` |
+
+### Examples
+
+**1. Aggregate Python and Markdown files:**
+```bash
+text-aggregator "**/*" --include-extensions .py .md
+```
+
+**2. Exclude log files:**
+```bash
+text-aggregator "logs/**" --exclude-extensions .log
+```
+
+**3. Save to a file instead of clipboard:**
+```bash
+text-aggregator "src/**/*.js" --output-file all_scripts.js
 ```
 
 ---
 
-## Usage (as Python Module)
+## Usage as a Python Module
 
-If you prefer to use this as a Python module within a virtual environment:
+You can also use this tool within your Python scripts.
 
 ```python
-from text_aggregator import aggregate_text
+from text_aggregator.aggregator import aggregate_text
 
 # Aggregate all text files in the current directory and subdirectories
 text = aggregate_text("**/*.txt")
 
 # Print the aggregated text
-print(text)
+if text:
+    print(text)
 ```
 
-# Documentation
+### `aggregate_text` Function
 
-## `aggregate_text`
+```python
+def aggregate_text(
+    path_pattern: str,
+    include_extensions: Optional[List[str]] = None,
+    exclude_extensions: Optional[List[str]] = None,
+    output_file: Optional[str] = None,
+) -> Optional[str]:
+```
 
-Aggregates text from files matching a given path pattern and file extensions.
-
-### Arguments
-
-- `path_pattern` (str): The path pattern to search for files (e.g., "**/*.txt").
-- `include_extensions` (Optional[List[str]]): A list of file extensions to include (e.g., [".txt", ".md"]).
-- `exclude_extensions` (Optional[List[str]]): A list of file extensions to exclude (e.g., [".log"]).
-- `output_file` (Optional[str]): The path to a file to write the aggregated text to. If None, the text is copied to the clipboard.
-
-### Returns
-
-- (Optional[str]): The aggregated text as a string, or None if an output file is specified.
+- **Returns:** The aggregated text as a string if no `output_file` is provided. If `output_file` is provided, it returns `None` after writing the file.

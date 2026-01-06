@@ -23,3 +23,6 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://github.com/your-username/text-aggregator"
 "Bug Tracker" = "https://github.com/your-username/text-aggregator/issues"
+
+[project.scripts]
+text-aggregator = "text_aggregator.aggregator:main"
