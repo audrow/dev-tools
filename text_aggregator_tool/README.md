@@ -32,7 +32,7 @@ ta -s | code -
 
 ### Prerequisites
 
-You need `python3` and `pip` installed.
+You need `python3` (3.8+) and `pip` installed.
 
 For Linux users (especially headless servers), you also need `xclip` or `xsel` for clipboard functionality:
 ```bash
@@ -91,9 +91,10 @@ You can create an alias in your shell configuration (e.g., `.bashrc` or `.zshrc`
     ```bash
     nano ~/.bashrc
     ```
-2.  Add the following line (replace `/path/to/...` with the actual path):
+2.  Add the following lines (replace `/path/to/...` with the actual path):
     ```bash
     alias text-aggregator="python3 /path/to/intr_dev_tools/text_aggregator_tool/text_aggregator/aggregator.py"
+    alias ta="text-aggregator"
     ```
 3.  Reload your configuration:
     ```bash
@@ -223,6 +224,17 @@ text-aggregator -e log,tmp
 ### Headless Environments (VS Code Remote, SSH, Docker)
 
 If you see `Error: Could not copy to clipboard`, your environment likely lacks a display for the clipboard.
+
+**Configuration for SSH/Headless:**
+You can set up a default configuration to always write to a file instead of failing on clipboard access. Add this to `~/.text_aggregator.json`:
+
+```json
+{
+  "output_file": "text-aggregator-output.txt",
+  "no_copy": true,
+  "stdout": false
+}
+```
 
 **Workarounds:**
 

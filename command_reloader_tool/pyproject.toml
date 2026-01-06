@@ -3,18 +3,16 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "text-aggregator"
+name = "command-reloader"
 version = "0.0.1"
 authors = [
   { name="Audrow" },
 ]
 license = {text = "MIT"}
-description = "A simple text aggregator"
+description = "A tool to restart a command when git-tracked files change."
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = [
-    "pyperclip>=1.8.2",
-]
+dependencies = []
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
@@ -25,10 +23,8 @@ classifiers = [
 "Bug Tracker" = "https://github.com/audrow/dev-tools/issues"
 
 [project.scripts]
-text-aggregator = "text_aggregator.aggregator:main"
+command-reloader = "command_reloader.reloader:main"
+command-trigger-listener = "command_reloader.listener:main"
 
 [tool.setuptools.packages.find]
-include = ["text_aggregator*"]
-
-[tool.setuptools.package-data]
-text_aggregator = ["*.json"]
+include = ["command_reloader*", "listeners*"]
