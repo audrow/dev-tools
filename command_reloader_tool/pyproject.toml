@@ -22,6 +22,11 @@ classifiers = [
 "Homepage" = "https://github.com/audrow/dev-tools"
 "Bug Tracker" = "https://github.com/audrow/dev-tools/issues"
 
+[project.optional-dependencies]
+dev = [
+    "black",
+]
+
 [project.scripts]
 command-reloader = "command_reloader.reloader:main"
 command-trigger-listener = "command_reloader.listener:main"

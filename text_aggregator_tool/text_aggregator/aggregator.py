@@ -9,13 +9,14 @@ from typing import List, Optional, Tuple, Dict, Any
 
 CONFIG_FILENAME = ".text_aggregator.json"
 
+
 def load_config() -> Dict[str, Any]:
     """
     Loads configuration.
     Priority: Global Config (~/.text_aggregator.json) > Package Default (default_config.json).
     """
     config = {}
-    
+
     # 1. Load Package Default Config
     package_config_path = os.path.join(os.path.dirname(__file__), "default_config.json")
     if os.path.exists(package_config_path):
@@ -33,14 +34,16 @@ def load_config() -> Dict[str, Any]:
                 config.update(json.load(f))
         except json.JSONDecodeError as e:
             print(f"Warning: Could not parse global config {global_config_path}: {e}")
-            
+
     return config
+
 
 def _normalize_extensions(extensions: Optional[List[str]]) -> Optional[List[str]]:
     """Ensures all extensions start with a dot."""
     if not extensions:
         return extensions
     return [ext if ext.startswith(".") else f".{ext}" for ext in extensions]
+
 
 def _generate_tree_structure(paths: List[str]) -> str:
     """Generates a tree-like string representation of the given file paths."""
@@ -50,16 +53,16 @@ def _generate_tree_structure(paths: List[str]) -> str:
         current = tree
         for part in parts:
             current = current.setdefault(part, {})
-    
+
     lines = []
-    
+
     def _build_tree_string(current_node, prefix=""):
         keys = sorted(current_node.keys())
         for i, key in enumerate(keys):
-            is_last = (i == len(keys) - 1)
+            is_last = i == len(keys) - 1
             connector = "└── " if is_last else "├── "
             lines.append(f"{prefix}{connector}{key}")
-            
+
             children = current_node[key]
             if children:
                 extension = "    " if is_last else "│   "
@@ -67,6 +70,7 @@ def _generate_tree_structure(paths: List[str]) -> str:
 
     _build_tree_string(tree)
     return "\n".join(lines) + "\n"
+
 
 def aggregate_text(
     path_patterns: List[str],
@@ -108,15 +112,17 @@ def aggregate_text(
     all_files = []
     for pattern in path_patterns:
         all_files.extend(glob.glob(pattern, recursive=True))
-    
+
     # Remove duplicates and sort
     files = sorted(list(set(all_files)))
     processed_files = []
-    
+
     # First pass: identify valid files to build structure
     valid_files = []
     for file in files:
-        if include_extensions and not any(file.endswith(ext) for ext in include_extensions):
+        if include_extensions and not any(
+            file.endswith(ext) for ext in include_extensions
+        ):
             continue
         if exclude_extensions and any(file.endswith(ext) for ext in exclude_extensions):
             continue
@@ -158,17 +164,52 @@ def aggregate_text(
             pyperclip.copy(aggregated_text)
         return aggregated_text, processed_files
 
+
 def main():
     config = load_config()
-    
+
     parser = argparse.ArgumentParser(description="Aggregate text from files.")
-    parser.add_argument("path_patterns", type=str, nargs="*", help="The path patterns to search for files (e.g., \"**/*.txt\"). Defaults to \"**/*\".")
-    parser.add_argument("-i", "--include-extensions", nargs="*", help="A list of file extensions to include (e.g., \"txt,md\").")
-    parser.add_argument("-e", "--exclude-extensions", nargs="*", help="A list of file extensions to exclude (e.g., \"log,tmp\").")
-    parser.add_argument("-d", "--exclude-directories", nargs="*", help="A list of directory names to exclude. Defaults to package/global config.")
-    parser.add_argument("-o", "--output-file", type=str, help="The path to a file to write the aggregated text to. If not provided, the text is copied to the clipboard.")
-    parser.add_argument("--no-copy", action="store_true", help="Do not copy the aggregated text to the clipboard.")
-    parser.add_argument("-s", "--stdout", action="store_true", help="Print the aggregated text to standard output (implies --no-copy).")
+    parser.add_argument(
+        "path_patterns",
+        type=str,
+        nargs="*",
+        help='The path patterns to search for files (e.g., "**/*.txt"). Defaults to "**/*".',
+    )
+    parser.add_argument(
+        "-i",
+        "--include-extensions",
+        nargs="*",
+        help='A list of file extensions to include (e.g., "txt,md").',
+    )
+    parser.add_argument(
+        "-e",
+        "--exclude-extensions",
+        nargs="*",
+        help='A list of file extensions to exclude (e.g., "log,tmp").',
+    )
+    parser.add_argument(
+        "-d",
+        "--exclude-directories",
+        nargs="*",
+        help="A list of directory names to exclude. Defaults to package/global config.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output-file",
+        type=str,
+        help="The path to a file to write the aggregated text to. If not provided, the text is copied to the clipboard.",
+    )
+    parser.add_argument(
+        "--no-copy",
+        action="store_true",
+        help="Do not copy the aggregated text to the clipboard.",
+    )
+    parser.add_argument(
+        "-s",
+        "--stdout",
+        action="store_true",
+        help="Print the aggregated text to standard output (implies --no-copy).",
+    )
 
     args = parser.parse_args()
 
@@ -186,11 +227,11 @@ def main():
     exclude_directories = args.exclude_directories
     if exclude_directories is None:
         exclude_directories = config.get("exclude_directories")
-    
+
     include_extensions = _parse_exts(args.include_extensions)
     if include_extensions is None:
         include_extensions = config.get("include_extensions")
-        
+
     exclude_extensions = _parse_exts(args.exclude_extensions)
     if exclude_extensions is None:
         exclude_extensions = config.get("exclude_extensions")
@@ -222,7 +263,9 @@ def main():
         )
     except pyperclip.PyperclipException as e:
         print(f"Error: Could not copy to clipboard.\nDetails: {e}")
-        print("Tip: If you are running in a headless environment (e.g., SSH, Docker) without X11 forwarding, the clipboard cannot be accessed. Try using --output-file or --no-copy.")
+        print(
+            "Tip: If you are running in a headless environment (e.g., SSH, Docker) without X11 forwarding, the clipboard cannot be accessed. Try using --output-file or --no-copy."
+        )
         sys.exit(1)
 
     if stdout:
@@ -233,7 +276,7 @@ def main():
     print(f"Found {len(processed_files)} files:")
     for file in processed_files:
         print(f"  - {file}")
-    
+
     print("-" * 20)
 
     if output_file:
@@ -246,6 +289,6 @@ def main():
     else:
         print("Aggregation complete. (Clipboard copy disabled)")
 
+
 if __name__ == "__main__":
     main()
-
