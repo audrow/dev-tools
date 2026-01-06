@@ -30,7 +30,7 @@ class TestCommandReloader(unittest.TestCase):
     @patch('subprocess.check_output')
     def test_start_process(self, mock_check_output, mock_popen):
         reloader = CommandReloader("my_command")
-        reloader.start_process()
+        reloader._start_main_process()
         
         mock_popen.assert_called_with(
             "my_command", 
@@ -48,7 +48,7 @@ class TestCommandReloader(unittest.TestCase):
         mock_process.pid = 12345
         mock_popen.return_value = mock_process
         
-        reloader.start_process()
+        reloader._start_main_process()
         reloader.stop_process()
         
         mock_getpgid.assert_called_with(12345)
@@ -64,6 +64,10 @@ class TestCommandReloader(unittest.TestCase):
         root = reloader._get_git_root()
         self.assertEqual(root, "/path/to/repo")
         mock_check_output.assert_called_with(["git", "rev-parse", "--show-toplevel"], stderr=-3)
+    
+    def test_debounce_init(self):
+        reloader = CommandReloader("cmd", debounce_interval=2.5)
+        self.assertEqual(reloader.debounce_interval, 2.5)
 
 if __name__ == '__main__':
     unittest.main()

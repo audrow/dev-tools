@@ -77,6 +77,10 @@ command-reloader -- python my_script.py
 | :--- | :--- | :--- |
 | `command` | The command to run and restart. Use `--` before it if it has flags. | `-- python app.py` |
 | `--interval` | Check interval in seconds. Defaults to `1.0`. | `--interval 2.0` |
+| `--debounce` | Debounce interval in seconds. Defaults to `0.5`. | `--debounce 1.0` |
+| `--wait-for-port` | Wait for a localhost TCP port to open before running hooks. | `--wait-for-port 8080` |
+| `--on-restart` | Shell command to run after start (and port check). | `--on-restart "notify-send Restarted"` |
+| `--webhook-url` | URL to GET request after start. | `--webhook-url http://localhost:9999` |
 
 ### Examples
 
@@ -94,6 +98,79 @@ command-reloader -- bazel run //my:target
 ```bash
 command-reloader --interval 2.0 -- ./start_server.sh
 ```
+
+**4. Browser Refresh (Local):**
+Wait for port 8080 to be ready, then trigger a browser refresh (Linux example using `xdotool`).
+
+```bash
+command-reloader \
+  --wait-for-port 8080 \
+  --on-restart "xdotool search --onlyvisible --class chrome windowfocus key F5" \
+  -- python server.py
+```
+
+---
+
+## Complete Remote Development Guide (Step-by-Step)
+
+This guide shows how to set up automatic browser refreshing when you develop on a remote machine (SSH) but view the app on your local browser.
+
+### 1. Setup Local Listener (Laptop/Desktop)
+
+You need to run a small script on your **local machine** that listens for the refresh signal.
+
+**Download or Copy the script for your OS:**
+
+*   **MacOS (Chrome):** [listeners/mac_listener.py](listeners/mac_listener.py)
+*   **Linux (Chrome):** [listeners/linux_listener.py](listeners/linux_listener.py) (Requires `xdotool`)
+
+**Run it:**
+```bash
+python3 mac_listener.py
+# Output: Listening on port 9999...
+```
+
+### 2. Connect via SSH
+Connect to your remote machine with **Reverse Port Forwarding** (`-R`) for the listener and **Local Port Forwarding** (`-L`) for your app.
+
+```bash
+# Example: App on 8080, Listener on 9999
+ssh -N -L 8080:localhost:8080 -R 9999:localhost:9999 user@remote-host
+```
+
+### 3. Run Reloader (Remote Machine)
+On the remote machine, use `cr` (Command Reloader) to run your app. It will wait for the app port (8080) to be ready, then trigger the webhook (9999) to refresh your local browser.
+
+```bash
+cr --wait-for-port 8080 \
+   --webhook-url http://localhost:9999 \
+   -- bazel run //my:target
+```
+
+---
+
+## Troubleshooting: VS Code Port Forwarding Conflicts
+
+If you use VS Code Remote (SSH), its **"Automatic Port Forwarding"** feature may conflict with this tool by grabbing port `9999` before your local listener can start.
+
+### The Symptoms
+- Local listener fails with: `OSError: [Errno 48] Address already in use`.
+- Running `lsof -i :9999` shows "Visual Studio Code" as the process owner.
+
+### How to Fix
+1.  **Stop the Auto-Forward:** Open the **"Ports"** view in VS Code (bottom panel), right-click port `9999`, and select **"Unforward Port."**
+2.  **Disable Auto-Forwarding (Recommended):**
+    - Open VS Code Settings (`Cmd + ,`).
+    - Search for `remote.ports.autoForward` and uncheck it.
+3.  **Configure Attributes (Best of both worlds):**
+    Add this to your `settings.json` to ignore port `9999` while keeping auto-forward for others:
+    ```json
+    "remote.ports.attributes": {
+        "9999": {
+            "onAutoForward": "ignore"
+        }
+    }
+    ```
 
 ## Usage as a Python Module
 
