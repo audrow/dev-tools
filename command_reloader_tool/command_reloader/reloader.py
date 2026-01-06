@@ -108,7 +108,7 @@ class CommandReloader:
 
         while True:
             try:
-                data = os.read(fd, 1024)
+                data = os.read(fd, 4096) # Larger chunk size for better performance
                 if not data:
                     break
                 
@@ -121,17 +121,17 @@ class CommandReloader:
                     text_chunk = data.decode("utf-8", errors="replace")
                     buffer += text_chunk
                     
+                    # Process line by line to keep buffer small
                     while "\n" in buffer:
                         line, buffer = buffer.split("\n", 1)
-                        # Remove ANSI codes for cleaner regex matching? 
-                        # Ideally yes, but users might want to match generic text.
-                        # Simple ANSI strip regex:
-                        clean_line = re.sub(r'\x1B(?:[@-Z\\-_]|\\[[0-?]*[ -/]*[@-~])', '', line)
+                        # Remove ANSI codes for cleaner regex matching
+                        clean_line = re.sub(r'\x1B(?:[@-Z\\-_]|[0-?]*[ -/]*[@-~])', '', line)
                         
                         if regex.search(clean_line) or regex.search(line):
                             with self.condition_lock:
                                 if "REGEX" in self.conditions:
-                                    print(f"[CommandReloader] Regex matched: '{line.strip()}'")
+                                    # Print a small indicator that we found it (stderr so it doesn't mess up pipe output if any)
+                                    sys.stderr.write(f"\n[CommandReloader] Matched: '{line.strip()}'\n")
                                     self.conditions.discard("REGEX")
                                     if not self.conditions:
                                         self._trigger_success_actions()
@@ -149,24 +149,32 @@ class CommandReloader:
         sys.stdout.flush()
         
         try:
-            # Create a pseudo-terminal to preserve colors
-            master_fd, slave_fd = pty.openpty()
-            self.master_fd = master_fd
-            
-            self.process = subprocess.Popen(
-                self.command, 
-                shell=True,
-                stdout=slave_fd,
-                stderr=slave_fd,
-                stdin=slave_fd,
-                preexec_fn=os.setsid,
-                close_fds=True
-            )
-            os.close(slave_fd) # Close slave in parent
-            
-            # Start output monitor thread
-            t = threading.Thread(target=self._monitor_output, args=(master_fd,), daemon=True)
-            t.start()
+            if self.wait_for_regex:
+                # Use PTY only if we need to regex scan
+                master_fd, slave_fd = pty.openpty()
+                self.master_fd = master_fd
+                
+                self.process = subprocess.Popen(
+                    self.command, 
+                    shell=True,
+                    stdout=slave_fd,
+                    stderr=slave_fd,
+                    stdin=slave_fd, # Still no true input forwarding, but attached to pty
+                    preexec_fn=os.setsid,
+                    close_fds=True
+                )
+                os.close(slave_fd) 
+                
+                t = threading.Thread(target=self._monitor_output, args=(master_fd,), daemon=True)
+                t.start()
+            else:
+                # Standard behavior: Inherit Stdio (Preserves look/feel perfectly)
+                self.process = subprocess.Popen(
+                    self.command, 
+                    shell=True,
+                    preexec_fn=os.setsid
+                    # stdin/out/err implicitly inherited
+                )
             
         except Exception as e:
             print(f"[CommandReloader] Failed to start process: {e}")
@@ -213,7 +221,6 @@ class CommandReloader:
         if self.process:
             print(f"\n[CommandReloader] Stopping process...")
             
-            # Close master_fd to terminate monitor thread (read will fail/return empty)
             if self.master_fd:
                 try:
                     os.close(self.master_fd)
@@ -255,7 +262,6 @@ class CommandReloader:
                     self.last_change_time = time.time()
                     self.pending_restart = True
                     
-                    # Reset conditions
                     with self.condition_lock:
                         self.conditions.clear()
                     
@@ -284,13 +290,10 @@ class CommandReloader:
                             if not self.conditions:
                                 self._trigger_success_actions()
                     elif time.time() - self.post_start_start_time > self.port_timeout:
-                         # Timeout
                          with self.condition_lock:
                              if "PORT" in self.conditions:
                                  print(f"[CommandReloader] Timed out waiting for port {self.wait_for_port}.")
-                                 self.conditions.discard("PORT") # Don't block forever
-                                 # We don't trigger success if it timed out? Or partial?
-                                 # Let's assume failure means no trigger.
+                                 self.conditions.discard("PORT")
                 
         except KeyboardInterrupt:
             print("\n[CommandReloader] Exiting...")

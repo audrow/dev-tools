@@ -127,6 +127,15 @@ This guide shows how to set up automatic browser refreshing when you develop on 
 
 ### 1. Setup Local Listener (Laptop/Desktop)
 
+> **⚠️ VS CODE USERS: READ THIS FIRST**
+>
+> If you use VS Code Remote (SSH), it will try to **automatically forward port 9999** from the remote to your local machine. This will block your local listener from starting ("Address already in use").
+>
+> **BEFORE** running the listener:
+> 1. Open the **"Ports"** tab in VS Code (bottom panel).
+> 2. Find port `9999` and right-click -> **"Unforward Port"**.
+> 3. Ideally, disable `remote.ports.autoForward` in your settings or add `"remote.ports.attributes": { "9999": { "onAutoForward": "ignore" } }` to your `settings.json`.
+
 You need to run a small script on your **local machine** that listens for the refresh signal.
 
 **Download or Copy the script for your OS:**

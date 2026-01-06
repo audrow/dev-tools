@@ -28,7 +28,8 @@ class TestCommandReloader(unittest.TestCase):
 
     @patch('subprocess.Popen')
     @patch('subprocess.check_output')
-    def test_start_process(self, mock_check_output, mock_popen):
+    def test_start_process_standard(self, mock_check_output, mock_popen):
+        """Test standard startup (no regex)."""
         reloader = CommandReloader("my_command")
         reloader._start_main_process()
         
@@ -38,6 +39,31 @@ class TestCommandReloader(unittest.TestCase):
             preexec_fn=os.setsid
         )
         self.assertIsNotNone(reloader.process)
+
+    @patch('pty.openpty')
+    @patch('os.close')
+    @patch('threading.Thread')
+    @patch('subprocess.Popen')
+    @patch('subprocess.check_output')
+    def test_start_process_regex(self, mock_check_output, mock_popen, mock_thread, mock_close, mock_openpty):
+        """Test startup with regex (uses pty)."""
+        reloader = CommandReloader("my_command", wait_for_regex="Started")
+        mock_openpty.return_value = (10, 11) # Master, Slave
+        
+        reloader._start_main_process()
+        
+        mock_popen.assert_called_with(
+            "my_command", 
+            shell=True,
+            stdout=11, stderr=11, stdin=11,
+            preexec_fn=os.setsid,
+            close_fds=True
+        )
+        # Should close slave fd
+        mock_close.assert_called_with(11)
+        # Should start monitor thread
+        mock_thread.assert_called_once()
+        self.assertEqual(reloader.master_fd, 10)
 
     @patch('os.killpg')
     @patch('os.getpgid')
