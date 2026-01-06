@@ -24,6 +24,11 @@ classifiers = [
 "Homepage" = "https://github.com/audrow/dev-tools"
 "Bug Tracker" = "https://github.com/audrow/dev-tools/issues"
 
+[project.optional-dependencies]
+dev = [
+    "black",
+]
+
 [project.scripts]
 text-aggregator = "text_aggregator.aggregator:main"
 

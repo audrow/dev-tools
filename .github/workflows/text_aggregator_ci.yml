@@ -29,7 +29,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         cd text_aggregator_tool
-        pip install .
+        pip install .[dev]
+
+    - name: Check formatting with black
+      run: |
+        cd text_aggregator_tool
+        black --check .
 
     - name: Run tests
       run: |

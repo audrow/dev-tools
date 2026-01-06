@@ -29,7 +29,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         cd command_reloader_tool
-        pip install .
+        pip install .[dev]
+
+    - name: Check formatting with black
+      run: |
+        cd command_reloader_tool
+        black --check .
 
     - name: Run tests
       run: |
