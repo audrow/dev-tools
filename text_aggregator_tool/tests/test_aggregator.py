@@ -8,9 +8,8 @@ class TestAggregator(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
         self.create_test_file("file1.txt", "This is file 1.")
-        self.create_test_file("file2.txt", "This is file 2.")
-        self.create_test_file("file3.log", "This is a log file.")
-        self.create_test_file("file4.md", "This is a markdown file.")
+        self.create_test_file("sub/file2.txt", "This is file 2.")
+        
         self.cwd = os.getcwd()
         os.chdir(self.test_dir)
 
@@ -19,36 +18,42 @@ class TestAggregator(unittest.TestCase):
         shutil.rmtree(self.test_dir)
 
     def create_test_file(self, filename, content):
+        # Ensure dir exists
+        os.makedirs(os.path.dirname(os.path.join(self.test_dir, filename)), exist_ok=True)
         with open(os.path.join(self.test_dir, filename), "w") as f:
             f.write(content)
 
-    def test_aggregate_all_text_files(self):
-        expected_text = "This is file 1.\n\nThis is file 2."
-        aggregated_text = aggregate_text("**/*.txt")
-        self.assertEqual(aggregated_text.strip(), expected_text.strip())
+    def test_aggregate_format(self):
+        aggregated_text, files = aggregate_text(["**/*.txt"], no_copy=True)
+        
+        # Check for File Structure header
+        self.assertIn("FILE STRUCTURE:", aggregated_text)
+        
+        # Check for Tree structure elements
+        # Note: glob order might vary slightly, but file1.txt and sub should be there.
+        # file1.txt might be '├── file1.txt' or '└── file1.txt' depending on order.
+        self.assertTrue("├── file1.txt" in aggregated_text or "└── file1.txt" in aggregated_text)
+        self.assertTrue("├── sub" in aggregated_text or "└── sub" in aggregated_text)
+        # file2.txt is inside sub, so it should be indented
+        self.assertTrue("    ├── file2.txt" in aggregated_text or "    └── file2.txt" in aggregated_text or "│   └── file2.txt" in aggregated_text)
 
-    def test_aggregate_with_include_extensions(self):
-        expected_text = "This is file 1.\n\nThis is file 2.\n\nThis is a markdown file."
-        aggregated_text = aggregate_text("**/*", include_extensions=[ ".txt", ".md"])
-        self.assertEqual(aggregated_text.strip(), expected_text.strip())
+        # Check for Delimiters
+        self.assertIn("--- START OF FILE: file1.txt ---", aggregated_text)
+        self.assertIn("This is file 1.", aggregated_text)
+        self.assertIn("--- END OF FILE: file1.txt ---", aggregated_text)
+        
+        # Windows/Linux separators might differ in the path, but we are using os.path.normpath/glob
+        # glob returns relative paths like sub/file2.txt
+        path_sep_file2 = os.path.join("sub", "file2.txt")
+        self.assertIn(f"--- START OF FILE: {path_sep_file2} ---", aggregated_text)
+        self.assertIn("This is file 2.", aggregated_text)
 
-    def test_aggregate_with_exclude_extensions(self):
-        expected_text = "This is file 1.\n\nThis is file 2.\n\nThis is a markdown file."
-        aggregated_text = aggregate_text("**/*", exclude_extensions=[ ".log"])
-        self.assertEqual(aggregated_text.strip(), expected_text.strip())
-
-    def test_aggregate_to_file(self):
-        output_file = "output.txt"
-        self.assertIsNone(aggregate_text("**/*.txt", output_file=output_file))
-        with open(output_file, "r") as f:
-            content = f.read()
-        expected_text = "This is file 1.\n\nThis is file 2."
-        self.assertEqual(content.strip(), expected_text.strip())
-
-    def test_aggregate_returns_text(self):
-        expected_text = "This is file 1.\n\nThis is file 2."
-        aggregated_text = aggregate_text("**/*.txt")
-        self.assertEqual(aggregated_text.strip(), expected_text.strip())
+    def test_exclude_directories(self):
+        os.makedirs("venv")
+        self.create_test_file("venv/hidden.txt", "hidden")
+        aggregated_text, files = aggregate_text(["**/*"], no_copy=True)
+        self.assertNotIn("venv/hidden.txt", files)
+        self.assertNotIn("hidden", aggregated_text)
 
 if __name__ == "__main__":
     unittest.main()
