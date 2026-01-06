@@ -100,8 +100,8 @@ text-aggregator src/*.py tests/*.py
 | Option | Short | Description | Example |
 | :--- | :--- | :--- | :--- |
 | `path_patterns` | | **Required.** One or more patterns or file paths. | `"src/**/*.py"` |
-| `--include-extensions` | `-i` | List of extensions to include. | `-i .py .md` |
-| `--exclude-extensions` | `-e` | List of extensions to exclude. | `-e .log .tmp` |
+| `--include-extensions` | `-i` | List of extensions to include. Leading dot is optional. | `-i py md` |
+| `--exclude-extensions` | `-e` | List of extensions to exclude. Leading dot is optional. | `-e log tmp` |
 | `--exclude-directories`| `-d` | List of directory names to exclude. | `-d node_modules venv` |
 | `--output-file` | `-o` | Write to file instead of clipboard. | `-o combined.txt` |
 | `--no-copy` | | Do not copy to clipboard. | `--no-copy` |
@@ -109,16 +109,44 @@ text-aggregator src/*.py tests/*.py
 
 > **Note on Quotes:** Using quotes (e.g., `"**/*.py"`) allows the script to handle recursive globbing internally. Omitting quotes (e.g., `**/*.py`) relies on your shell's expansion, which might behave differently depending on your shell settings (like `globstar` in bash).
 
+### Configuration File
+
+You can customize the tool's default behavior using a `.text_aggregator.json` file. The tool looks for configuration in two locations:
+
+1.  **Package Default:** Located within the tool's installation directory. This provides sensible defaults (like excluding `node_modules`, `venv`, etc.).
+2.  **Global:** Your home directory (`~/.text_aggregator.json`). This allows you to set your personal preferences across all projects.
+
+**Example `.text_aggregator.json`:**
+```json
+{
+  "exclude_directories": ["node_modules", "venv", "dist", "custom_ignore"],
+  "include_extensions": ["py", "md", "txt"],
+  "exclude_extensions": ["log", "tmp"],
+  "output_file": null,
+  "no_copy": false,
+  "stdout": false
+}
+```
+
+*   `output_file`: (string/null) Default path to write output to.
+*   `no_copy`: (boolean) If true, disables clipboard copying by default.
+*   `stdout`: (boolean) If true, prints to standard output by default.
+
+**Precedence:**
+Command-line arguments **>** Global Config (`~/`) **>** Package Default.
+
+*Note: Global configuration overrides package defaults. Configuration in the current working directory is not supported to ensure consistent behavior regardless of where you run the tool.*
+
 ### Examples
 
 **1. Aggregate Python and Markdown files (using short flags):**
 ```bash
-text-aggregator "**/*" -i .py .md
+text-aggregator "**/*" -i py md
 ```
 
 **2. Exclude log files and a custom directory:**
 ```bash
-text-aggregator "logs/**" -e .log -d archive
+text-aggregator "logs/**" -e log -d archive
 ```
 
 **3. Save to a file instead of clipboard:**

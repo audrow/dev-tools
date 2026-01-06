@@ -2,11 +2,45 @@
 import glob
 import os
 import sys
+import json
 import pyperclip
 import argparse
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 
-DEFAULT_EXCLUDE_DIRS = ["node_modules", "venv", ".venv", "__pycache__", ".git", "build", "dist"]
+CONFIG_FILENAME = ".text_aggregator.json"
+
+def load_config() -> Dict[str, Any]:
+    """
+    Loads configuration.
+    Priority: Global Config (~/.text_aggregator.json) > Package Default (default_config.json).
+    """
+    config = {}
+    
+    # 1. Load Package Default Config
+    package_config_path = os.path.join(os.path.dirname(__file__), "default_config.json")
+    if os.path.exists(package_config_path):
+        try:
+            with open(package_config_path, "r") as f:
+                config.update(json.load(f))
+        except json.JSONDecodeError as e:
+            print(f"Warning: Could not parse package config {package_config_path}: {e}")
+
+    # 2. Load Global Config (~/.text_aggregator.json)
+    global_config_path = os.path.join(os.path.expanduser("~"), CONFIG_FILENAME)
+    if os.path.exists(global_config_path):
+        try:
+            with open(global_config_path, "r") as f:
+                config.update(json.load(f))
+        except json.JSONDecodeError as e:
+            print(f"Warning: Could not parse global config {global_config_path}: {e}")
+            
+    return config
+
+def _normalize_extensions(extensions: Optional[List[str]]) -> Optional[List[str]]:
+    """Ensures all extensions start with a dot."""
+    if not extensions:
+        return extensions
+    return [ext if ext.startswith(".") else f".{ext}" for ext in extensions]
 
 def _generate_tree_structure(paths: List[str]) -> str:
     """Generates a tree-like string representation of the given file paths."""
@@ -20,15 +54,12 @@ def _generate_tree_structure(paths: List[str]) -> str:
     lines = []
     
     def _build_tree_string(current_node, prefix=""):
-        # Sort keys: directories first, then files? Or just alphabetical?
-        # Usually directories first or mixed alphabetical. Let's do alphabetical.
         keys = sorted(current_node.keys())
         for i, key in enumerate(keys):
             is_last = (i == len(keys) - 1)
             connector = "└── " if is_last else "├── "
             lines.append(f"{prefix}{connector}{key}")
             
-            # Recurse if there are children
             children = current_node[key]
             if children:
                 extension = "    " if is_last else "│   "
@@ -50,10 +81,10 @@ def aggregate_text(
 
     Args:
         path_patterns: A list of path patterns to search for files (e.g., ["**/*.txt"]).
-        include_extensions: A list of file extensions to include (e.g., [".txt", ".md"])
-        exclude_extensions: A list of file extensions to exclude (e.g., [".log"])
+        include_extensions: A list of file extensions to include (e.g., [".txt", "md"]).
+        exclude_extensions: A list of file extensions to exclude (e.g., ["log"]).
         exclude_directories: A list of directory names to exclude (e.g., ["node_modules"]).
-                             Defaults to DEFAULT_EXCLUDE_DIRS if None.
+                             Defaults to package/global config if None.
         output_file: The path to a file to write the aggregated text to. If None, the text is copied to the clipboard.
         no_copy: If True, the aggregated text will not be copied to the clipboard.
 
@@ -65,8 +96,14 @@ def aggregate_text(
     Raises:
         pyperclip.PyperclipException: If clipboard copy is requested but fails.
     """
+    # Load defaults if not provided
     if exclude_directories is None:
-        exclude_directories = DEFAULT_EXCLUDE_DIRS
+        config = load_config()
+        exclude_directories = config.get("exclude_directories", [])
+
+    # Normalize extensions
+    include_extensions = _normalize_extensions(include_extensions)
+    exclude_extensions = _normalize_extensions(exclude_extensions)
 
     all_files = []
     for pattern in path_patterns:
@@ -122,42 +159,65 @@ def aggregate_text(
         return aggregated_text, processed_files
 
 def main():
+    config = load_config()
+    
     parser = argparse.ArgumentParser(description="Aggregate text from files.")
     parser.add_argument("path_patterns", type=str, nargs="+", help="The path patterns to search for files (e.g., \"**/*.txt\").")
-    parser.add_argument("-i", "--include-extensions", nargs="*", help="A list of file extensions to include (e.g., \".txt\" \".md\").")
-    parser.add_argument("-e", "--exclude-extensions", nargs="*", help="A list of file extensions to exclude (e.g., \".log\").")
-    parser.add_argument("-d", "--exclude-directories", nargs="*", help=f"A list of directory names to exclude. Defaults to {DEFAULT_EXCLUDE_DIRS}.")
+    parser.add_argument("-i", "--include-extensions", nargs="*", help="A list of file extensions to include (e.g., \"txt\" \"md\").")
+    parser.add_argument("-e", "--exclude-extensions", nargs="*", help="A list of file extensions to exclude (e.g., \"log\").")
+    parser.add_argument("-d", "--exclude-directories", nargs="*", help="A list of directory names to exclude. Defaults to package/global config.")
     parser.add_argument("-o", "--output-file", type=str, help="The path to a file to write the aggregated text to. If not provided, the text is copied to the clipboard.")
     parser.add_argument("--no-copy", action="store_true", help="Do not copy the aggregated text to the clipboard.")
     parser.add_argument("-s", "--stdout", action="store_true", help="Print the aggregated text to standard output (implies --no-copy).")
 
     args = parser.parse_args()
 
+    # Determine final values (CLI > Config)
+    exclude_directories = args.exclude_directories
+    if exclude_directories is None:
+        exclude_directories = config.get("exclude_directories")
+    
+    include_extensions = args.include_extensions
+    if include_extensions is None:
+        include_extensions = config.get("include_extensions")
+        
+    exclude_extensions = args.exclude_extensions
+    if exclude_extensions is None:
+        exclude_extensions = config.get("exclude_extensions")
+
+    output_file = args.output_file
+    if output_file is None:
+        output_file = config.get("output_file")
+
+    no_copy = args.no_copy
+    if not no_copy:
+        no_copy = config.get("no_copy", False)
+
+    stdout = args.stdout
+    if not stdout:
+        stdout = config.get("stdout", False)
+
     # If stdout is requested, disable clipboard copy
-    if args.stdout:
-        args.no_copy = True
+    if stdout:
+        no_copy = True
 
     try:
         text, processed_files = aggregate_text(
             path_patterns=args.path_patterns,
-            include_extensions=args.include_extensions,
-            exclude_extensions=args.exclude_extensions,
-            exclude_directories=args.exclude_directories,
-            output_file=args.output_file,
-            no_copy=args.no_copy,
+            include_extensions=include_extensions,
+            exclude_extensions=exclude_extensions,
+            exclude_directories=exclude_directories,
+            output_file=output_file,
+            no_copy=no_copy,
         )
     except pyperclip.PyperclipException as e:
         print(f"Error: Could not copy to clipboard.\nDetails: {e}")
         print("Tip: If you are running in a headless environment (e.g., SSH, Docker) without X11 forwarding, the clipboard cannot be accessed. Try using --output-file or --no-copy.")
         sys.exit(1)
 
-    if args.stdout:
+    if stdout:
         if text:
             print(text)
-        elif args.output_file:
-             # If written to file but stdout requested, we can't easily print it unless we read it back or change logic.
-             # For now, let's assume stdout implies "don't use output_file" or just print nothing if output_file consumed it.
-             pass
         return
 
     print(f"Found {len(processed_files)} files:")
@@ -166,15 +226,12 @@ def main():
     
     print("-" * 20)
 
-    if args.output_file:
-        print(f"Successfully written to {args.output_file}")
-    elif not args.no_copy:
+    if output_file:
+        print(f"Successfully written to {output_file}")
+    elif not no_copy:
         if text:
             print(f"Successfully copied to clipboard ({len(text)} characters)")
         else:
             print("No text found to copy.")
     else:
         print("Aggregation complete. (Clipboard copy disabled)")
-
-if __name__ == "__main__":
-    main()

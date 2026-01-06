@@ -1,0 +1,8 @@
+{
+  "exclude_directories": ["node_modules", "venv", ".venv", "__pycache__", ".git", "build", "dist"],
+  "include_extensions": [],
+  "exclude_extensions": [],
+  "output_file": null,
+  "no_copy": false,
+  "stdout": false
+}

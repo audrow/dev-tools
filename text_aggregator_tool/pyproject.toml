@@ -26,3 +26,6 @@ classifiers = [
 
 [project.scripts]
 text-aggregator = "text_aggregator.aggregator:main"
+
+[tool.setuptools.package-data]
+text_aggregator = ["*.json"]
