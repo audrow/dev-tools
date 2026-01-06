@@ -2,6 +2,30 @@
 
 A simple text aggregator that takes a path (supports wildcards `**` and `*`) and file extensions to include or exclude, and puts all of the text into either a file or the user's clipboard (clipboard by default).
 
+## Quickstart
+
+The fastest way to get running on any system:
+
+1.  **Install Dependencies:**
+    ```bash
+    pip install --user pyperclip
+    sudo apt-get install -y xclip  # Linux only
+    ```
+2.  **Add Alias:** Add this to your `~/.bashrc` (adjust the path to where you cloned this repo):
+    ```bash
+    alias ta="python3 /path/to/text_aggregator_tool/text_aggregator/aggregator.py"
+    ```
+3.  **Run:**
+    ```bash
+    ta -i py,md  # Aggregates all .py and .md files in the current directory tree
+    ```
+
+**Quickstart for SSH / VS Code Remote:**
+If you are working remotely and want to open the result in a new VS Code tab:
+```bash
+ta -s | code -
+```
+
 ## Installation
 
 ### Prerequisites
@@ -87,7 +111,7 @@ text-aggregator
 
 You can also specify patterns:
 ```bash
-text-aggregator "**/*.txt"
+text-aggregator **/*.txt
 ```
 *Output:*
 ```text
@@ -117,6 +141,21 @@ The tool uses a hierarchical configuration system. You can customize defaults us
 #### Configuration Locations
 1.  **Package Default:** Bundled with the source code. It contains the base exclusions (like `node_modules`, `.git`).
 2.  **User Global:** Located at `~/.text_aggregator.json`. This is where you should put your personal preferences.
+
+**Quick Setup (Global Config):**
+Run this command to create a basic configuration in your home directory:
+```bash
+cat <<EOF > ~/.text_aggregator.json
+{
+  "exclude_directories": ["node_modules", "venv", ".venv", "__pycache__", ".git", "build", "dist"],
+  "include_extensions": [],
+  "exclude_extensions": [],
+  "output_file": null,
+  "no_copy": false,
+  "stdout": false
+}
+EOF
+```
 
 #### Configuration Keys
 | Key | Type | Description |
