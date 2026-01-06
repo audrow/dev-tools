@@ -8,24 +8,31 @@ import signal
 import socket
 import urllib.request
 import urllib.error
-from typing import Dict, Optional
+import pty
+import threading
+import re
+from typing import Dict, Optional, Set
 
 class CommandReloader:
-    def __init__(self, command: str, interval: float = 1.0, wait_for_port: Optional[int] = None, on_restart: Optional[str] = None, debounce_interval: float = 0.5, webhook_url: Optional[str] = None):
+    def __init__(self, command: str, interval: float = 1.0, wait_for_port: Optional[int] = None, wait_for_regex: Optional[str] = None, on_restart: Optional[str] = None, debounce_interval: float = 0.5, webhook_url: Optional[str] = None):
         self.command = command
         self.interval = interval
         self.wait_for_port = wait_for_port
+        self.wait_for_regex = wait_for_regex
         self.on_restart = on_restart
         self.debounce_interval = debounce_interval
         self.webhook_url = webhook_url
         
         self.process: Optional[subprocess.Popen] = None
+        self.master_fd: Optional[int] = None
         self.last_snapshot: Dict[str, float] = {}
         
         # State Machine Variables
         self.pending_restart = False
         self.last_change_time = 0.0
-        self.post_start_state = "IDLE" # IDLE, WAITING_FOR_PORT, DONE
+        self.conditions: Set[str] = set()
+        self.condition_lock = threading.Lock()
+        
         self.post_start_start_time = 0.0
         self.port_timeout = 30.0
 
@@ -40,10 +47,6 @@ class CommandReloader:
             sys.exit(1)
 
     def _get_snapshot(self) -> Dict[str, float]:
-        """
-        Returns a dictionary of {filename: mtime} for files currently 
-        showing up in git status.
-        """
         snapshot = {}
         try:
             cmd = ["git", "status", "--porcelain", "-z"]
@@ -87,40 +90,105 @@ class CommandReloader:
         return snapshot
 
     def _check_port(self, port: int) -> bool:
-        """Checks if a TCP port is open on localhost (non-blocking)."""
         try:
             with socket.create_connection(("localhost", port), timeout=0.1):
                 return True
         except (ConnectionRefusedError, socket.timeout, OSError):
             return False
 
+    def _monitor_output(self, fd: int):
+        """Reads from pty master, prints to stdout, and checks regex."""
+        buffer = ""
+        regex = None
+        if self.wait_for_regex:
+            try:
+                regex = re.compile(self.wait_for_regex)
+            except re.error as e:
+                print(f"[CommandReloader] Invalid regex: {e}")
+
+        while True:
+            try:
+                data = os.read(fd, 1024)
+                if not data:
+                    break
+                
+                # Echo to stdout immediately
+                sys.stdout.buffer.write(data)
+                sys.stdout.flush()
+                
+                # Logic for regex matching
+                if regex and "REGEX" in self.conditions:
+                    text_chunk = data.decode("utf-8", errors="replace")
+                    buffer += text_chunk
+                    
+                    while "\n" in buffer:
+                        line, buffer = buffer.split("\n", 1)
+                        # Remove ANSI codes for cleaner regex matching? 
+                        # Ideally yes, but users might want to match generic text.
+                        # Simple ANSI strip regex:
+                        clean_line = re.sub(r'\x1B(?:[@-Z\\-_]|\\[[0-?]*[ -/]*[@-~])', '', line)
+                        
+                        if regex.search(clean_line) or regex.search(line):
+                            with self.condition_lock:
+                                if "REGEX" in self.conditions:
+                                    print(f"[CommandReloader] Regex matched: '{line.strip()}'")
+                                    self.conditions.discard("REGEX")
+                                    if not self.conditions:
+                                        self._trigger_success_actions()
+                                        
+            except OSError:
+                break
+            except Exception as e:
+                print(f"[CommandReloader] Monitor error: {e}")
+                break
+
     def _start_main_process(self):
-        """Starts the main command process."""
-        self.stop_process() # Ensure clean slate
+        self.stop_process()
         
         print(f"\n[CommandReloader] Starting: {self.command}")
         sys.stdout.flush()
+        
         try:
+            # Create a pseudo-terminal to preserve colors
+            master_fd, slave_fd = pty.openpty()
+            self.master_fd = master_fd
+            
             self.process = subprocess.Popen(
                 self.command, 
                 shell=True,
-                preexec_fn=os.setsid
+                stdout=slave_fd,
+                stderr=slave_fd,
+                stdin=slave_fd,
+                preexec_fn=os.setsid,
+                close_fds=True
             )
+            os.close(slave_fd) # Close slave in parent
+            
+            # Start output monitor thread
+            t = threading.Thread(target=self._monitor_output, args=(master_fd,), daemon=True)
+            t.start()
+            
         except Exception as e:
             print(f"[CommandReloader] Failed to start process: {e}")
 
     def _init_post_start_sequence(self):
-        """Initializes the post-start sequence (waiting for port, etc)."""
-        if self.wait_for_port:
-            print(f"[CommandReloader] Waiting for port {self.wait_for_port}...")
-            self.post_start_state = "WAITING_FOR_PORT"
+        with self.condition_lock:
+            self.conditions.clear()
+            if self.wait_for_port:
+                self.conditions.add("PORT")
+                print(f"[CommandReloader] Waiting for port {self.wait_for_port}...")
+            
+            if self.wait_for_regex:
+                self.conditions.add("REGEX")
+                print(f"[CommandReloader] Waiting for log regex: '{self.wait_for_regex}'...")
+            
             self.post_start_start_time = time.time()
-        else:
-            self._trigger_success_actions()
-            self.post_start_state = "DONE"
+            
+            # If no conditions, trigger immediately
+            if not self.conditions:
+                self._trigger_success_actions()
 
     def _trigger_success_actions(self):
-        """Runs webhooks and on-restart hooks."""
         # 1. Webhook
         if self.webhook_url:
             self._call_webhook()
@@ -134,17 +202,25 @@ class CommandReloader:
                 print(f"[CommandReloader] Failed to run on-restart command: {e}")
 
     def _call_webhook(self):
-        """Sends a GET request to the configured webhook URL."""
         print(f"[CommandReloader] Triggering webhook: {self.webhook_url}")
         try:
             with urllib.request.urlopen(self.webhook_url, timeout=2.0) as response:
-                pass # Success
+                pass 
         except Exception as e:
             print(f"[CommandReloader] Webhook failed: {e}")
 
     def stop_process(self):
         if self.process:
             print(f"\n[CommandReloader] Stopping process...")
+            
+            # Close master_fd to terminate monitor thread (read will fail/return empty)
+            if self.master_fd:
+                try:
+                    os.close(self.master_fd)
+                except OSError:
+                    pass
+                self.master_fd = None
+
             try:
                 os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
                 try:
@@ -162,9 +238,8 @@ class CommandReloader:
         self._get_git_root()
         self.last_snapshot = self._get_snapshot()
         
-        # Initial trigger
         self.pending_restart = True
-        self.last_change_time = time.time() - self.debounce_interval # Start immediately
+        self.last_change_time = time.time() - self.debounce_interval 
         
         try:
             while True:
@@ -180,8 +255,9 @@ class CommandReloader:
                     self.last_change_time = time.time()
                     self.pending_restart = True
                     
-                    if self.post_start_state == "WAITING_FOR_PORT":
-                         self.post_start_state = "IDLE"
+                    # Reset conditions
+                    with self.condition_lock:
+                        self.conditions.clear()
                     
                     if self.process:
                          self.stop_process()
@@ -196,15 +272,25 @@ class CommandReloader:
                     else:
                         continue
 
-                # 3. Handle Post-Start Sequence
-                if self.post_start_state == "WAITING_FOR_PORT":
+                # 3. Handle Port Check (Thread handles Regex)
+                with self.condition_lock:
+                    check_port = "PORT" in self.conditions
+                
+                if check_port:
                     if self._check_port(self.wait_for_port):
                         print(f"[CommandReloader] Port {self.wait_for_port} is ready.")
-                        self._trigger_success_actions()
-                        self.post_start_state = "DONE"
+                        with self.condition_lock:
+                            self.conditions.discard("PORT")
+                            if not self.conditions:
+                                self._trigger_success_actions()
                     elif time.time() - self.post_start_start_time > self.port_timeout:
-                        print(f"[CommandReloader] Timed out waiting for port {self.wait_for_port}.")
-                        self.post_start_state = "DONE"
+                         # Timeout
+                         with self.condition_lock:
+                             if "PORT" in self.conditions:
+                                 print(f"[CommandReloader] Timed out waiting for port {self.wait_for_port}.")
+                                 self.conditions.discard("PORT") # Don't block forever
+                                 # We don't trigger success if it timed out? Or partial?
+                                 # Let's assume failure means no trigger.
                 
         except KeyboardInterrupt:
             print("\n[CommandReloader] Exiting...")
@@ -214,9 +300,10 @@ def main():
     parser = argparse.ArgumentParser(description="Watch for git file changes and restart a command.")
     parser.add_argument("--interval", type=float, default=1.0, help="Check interval in seconds (default: 1.0).")
     parser.add_argument("--debounce", type=float, default=0.5, help="Debounce interval in seconds (default: 0.5).")
-    parser.add_argument("--wait-for-port", type=int, help="Wait for this TCP port on localhost to be open before running hooks.")
-    parser.add_argument("--on-restart", type=str, help="Shell command to run after the main command starts (and port is ready).")
-    parser.add_argument("--webhook-url", type=str, help="URL to request (GET) after successful start. Useful for remote triggers.")
+    parser.add_argument("--wait-for-port", type=int, help="Wait for this TCP port on localhost to be open.")
+    parser.add_argument("--wait-for-regex", type=str, help="Wait for this regex in stdout/stderr.")
+    parser.add_argument("--on-restart", type=str, help="Shell command to run after start (and checks pass).")
+    parser.add_argument("--webhook-url", type=str, help="URL to GET request after checks pass.")
     parser.add_argument("command", type=str, nargs=argparse.REMAINDER, help="The command to run.")
     
     args = parser.parse_args()
@@ -238,6 +325,7 @@ def main():
         command_str, 
         interval=args.interval,
         wait_for_port=args.wait_for_port,
+        wait_for_regex=args.wait_for_regex,
         on_restart=args.on_restart,
         debounce_interval=args.debounce,
         webhook_url=args.webhook_url

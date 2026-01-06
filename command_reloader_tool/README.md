@@ -79,6 +79,7 @@ command-reloader -- python my_script.py
 | `--interval` | Check interval in seconds. Defaults to `1.0`. | `--interval 2.0` |
 | `--debounce` | Debounce interval in seconds. Defaults to `0.5`. | `--debounce 1.0` |
 | `--wait-for-port` | Wait for a localhost TCP port to open before running hooks. | `--wait-for-port 8080` |
+| `--wait-for-regex` | Wait for a regex pattern in stdout/stderr before running hooks. | `--wait-for-regex "Server started"` |
 | `--on-restart` | Shell command to run after start (and port check). | `--on-restart "notify-send Restarted"` |
 | `--webhook-url` | URL to GET request after start. | `--webhook-url http://localhost:9999` |
 
@@ -99,7 +100,16 @@ command-reloader -- bazel run //my:target
 command-reloader --interval 2.0 -- ./start_server.sh
 ```
 
-**4. Browser Refresh (Local):**
+**4. Wait for Log Message (Regex):**
+Trigger refresh only after the server prints "Listening on":
+```bash
+command-reloader \
+  --wait-for-regex "Listening on" \
+  --webhook-url http://localhost:9999 \
+  -- python server.py
+```
+
+**5. Browser Refresh (Local):**
 Wait for port 8080 to be ready, then trigger a browser refresh (Linux example using `xdotool`).
 
 ```bash
