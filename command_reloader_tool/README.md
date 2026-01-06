@@ -52,8 +52,8 @@ If you are on a managed system where you cannot install packages globally, you c
 
 1.  **Add Alias:** Add these to your `~/.bashrc` (adjust the path):
     ```bash
-    alias command-reloader="python3 /path/to/intr_dev_tools/command_reloader_tool/command_reloader/reloader.py"
-    alias command-trigger-listener="python3 /path/to/intr_dev_tools/command_reloader_tool/command_reloader/listener.py"
+    alias command-reloader="python3 /path/to/dev-tools/command_reloader_tool/command_reloader/reloader.py"
+    alias command-trigger-listener="python3 /path/to/dev-tools/command_reloader_tool/command_reloader/listener.py"
     alias cr="command-reloader"
     ```
 2.  **Reload:**

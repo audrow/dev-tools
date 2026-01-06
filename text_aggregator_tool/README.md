@@ -93,7 +93,7 @@ You can create an alias in your shell configuration (e.g., `.bashrc` or `.zshrc`
     ```
 2.  Add the following lines (replace `/path/to/...` with the actual path):
     ```bash
-    alias text-aggregator="python3 /path/to/intr_dev_tools/text_aggregator_tool/text_aggregator/aggregator.py"
+    alias text-aggregator="python3 /path/to/dev-tools/text_aggregator_tool/text_aggregator/aggregator.py"
     alias ta="text-aggregator"
     ```
 3.  Reload your configuration:
