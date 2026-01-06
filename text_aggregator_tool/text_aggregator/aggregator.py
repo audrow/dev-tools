@@ -162,9 +162,9 @@ def main():
     config = load_config()
     
     parser = argparse.ArgumentParser(description="Aggregate text from files.")
-    parser.add_argument("path_patterns", type=str, nargs="+", help="The path patterns to search for files (e.g., \"**/*.txt\").")
-    parser.add_argument("-i", "--include-extensions", nargs="*", help="A list of file extensions to include (e.g., \"txt\" \"md\").")
-    parser.add_argument("-e", "--exclude-extensions", nargs="*", help="A list of file extensions to exclude (e.g., \"log\").")
+    parser.add_argument("path_patterns", type=str, nargs="*", help="The path patterns to search for files (e.g., \"**/*.txt\"). Defaults to \"**/*\".")
+    parser.add_argument("-i", "--include-extensions", nargs="*", help="A list of file extensions to include (e.g., \"txt,md\").")
+    parser.add_argument("-e", "--exclude-extensions", nargs="*", help="A list of file extensions to exclude (e.g., \"log,tmp\").")
     parser.add_argument("-d", "--exclude-directories", nargs="*", help="A list of directory names to exclude. Defaults to package/global config.")
     parser.add_argument("-o", "--output-file", type=str, help="The path to a file to write the aggregated text to. If not provided, the text is copied to the clipboard.")
     parser.add_argument("--no-copy", action="store_true", help="Do not copy the aggregated text to the clipboard.")
@@ -173,15 +173,25 @@ def main():
     args = parser.parse_args()
 
     # Determine final values (CLI > Config)
+    path_patterns = args.path_patterns if args.path_patterns else ["**/*"]
+
+    def _parse_exts(ext_list: Optional[List[str]]) -> Optional[List[str]]:
+        if not ext_list:
+            return ext_list
+        parsed = []
+        for item in ext_list:
+            parsed.extend([x.strip() for x in item.split(",") if x.strip()])
+        return parsed
+
     exclude_directories = args.exclude_directories
     if exclude_directories is None:
         exclude_directories = config.get("exclude_directories")
     
-    include_extensions = args.include_extensions
+    include_extensions = _parse_exts(args.include_extensions)
     if include_extensions is None:
         include_extensions = config.get("include_extensions")
         
-    exclude_extensions = args.exclude_extensions
+    exclude_extensions = _parse_exts(args.exclude_extensions)
     if exclude_extensions is None:
         exclude_extensions = config.get("exclude_extensions")
 
@@ -203,7 +213,7 @@ def main():
 
     try:
         text, processed_files = aggregate_text(
-            path_patterns=args.path_patterns,
+            path_patterns=path_patterns,
             include_extensions=include_extensions,
             exclude_extensions=exclude_extensions,
             exclude_directories=exclude_directories,
@@ -235,3 +245,7 @@ def main():
             print("No text found to copy.")
     else:
         print("Aggregation complete. (Clipboard copy disabled)")
+
+if __name__ == "__main__":
+    main()
+

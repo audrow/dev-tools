@@ -1,4 +1,12 @@
 {
+  "_comments": {
+    "exclude_directories": "List of directory names to skip entirely (recursive).",
+    "include_extensions": "List of file extensions to include (e.g. ['py', 'md']). Leading dots are optional.",
+    "exclude_extensions": "List of file extensions to ignore.",
+    "output_file": "Default path to write aggregated text. Set to null to use clipboard.",
+    "no_copy": "If true, disables clipboard copying by default.",
+    "stdout": "If true, prints aggregated text to the terminal by default."
+  },
   "exclude_directories": ["node_modules", "venv", ".venv", "__pycache__", ".git", "build", "dist"],
   "include_extensions": [],
   "exclude_extensions": [],

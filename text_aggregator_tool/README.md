@@ -31,9 +31,12 @@ If you want to modify the code, install in editable mode:
 pip install -e .
 ```
 
-### Managed Systems / Manual Setup
+### Installation on Managed Systems (e.g. Google Cloud Shell, Corporate Laptop)
 
 If you are on a managed system where you cannot install packages globally or prefer a manual setup, you have two options.
+
+**Recommendation:** Using a Bash Alias (Option 2) is often the easiest and least intrusive method.
+
 **Note:** Both options require `pyperclip` to be installed (e.g., `pip install --user pyperclip`) and `xclip`/`xsel` for Linux users.
 
 #### Option 1: Copy to User Executable Folder
@@ -77,7 +80,12 @@ Once installed, you can use the `text-aggregator` command from your terminal.
 
 ### Basic Usage
 
-Aggregate all `.txt` files in the current directory and subdirectories, and copy the content to your clipboard:
+Aggregate all files in the current directory and subdirectories (defaulting to `**/*`), and copy the content to your clipboard:
+```bash
+text-aggregator
+```
+
+You can also specify patterns:
 ```bash
 text-aggregator "**/*.txt"
 ```
@@ -90,33 +98,37 @@ Found 2 files:
 Successfully copied to clipboard (150 characters)
 ```
 
-You can also pass multiple files or patterns directly (shell expansion):
-```bash
-text-aggregator src/*.py tests/*.py
-```
-
 ### Options
 
 | Option | Short | Description | Example |
 | :--- | :--- | :--- | :--- |
-| `path_patterns` | | **Required.** One or more patterns or file paths. | `"src/**/*.py"` |
-| `--include-extensions` | `-i` | List of extensions to include. Leading dot is optional. | `-i py md` |
-| `--exclude-extensions` | `-e` | List of extensions to exclude. Leading dot is optional. | `-e log tmp` |
+| `path_patterns` | | One or more patterns or file paths. Defaults to `**/*`. | `"src/**/*.py"` |
+| `--include-extensions` | `-i` | List of extensions to include. Comma-separated or space-separated. | `-i py,md,txt` |
+| `--exclude-extensions` | `-e` | List of extensions to exclude. Comma-separated or space-separated. | `-e log,tmp` |
 | `--exclude-directories`| `-d` | List of directory names to exclude. | `-d node_modules venv` |
 | `--output-file` | `-o` | Write to file instead of clipboard. | `-o combined.txt` |
 | `--no-copy` | | Do not copy to clipboard. | `--no-copy` |
 | `--stdout` | `-s` | Print text to stdout (implies --no-copy). | `-s` |
 
-> **Note on Quotes:** Using quotes (e.g., `"**/*.py"`) allows the script to handle recursive globbing internally. Omitting quotes (e.g., `**/*.py`) relies on your shell's expansion, which might behave differently depending on your shell settings (like `globstar` in bash).
+### Configuration
 
-### Configuration File
+The tool uses a hierarchical configuration system. You can customize defaults using a `.text_aggregator.json` file.
 
-You can customize the tool's default behavior using a `.text_aggregator.json` file. The tool looks for configuration in two locations:
+#### Configuration Locations
+1.  **Package Default:** Bundled with the source code. It contains the base exclusions (like `node_modules`, `.git`).
+2.  **User Global:** Located at `~/.text_aggregator.json`. This is where you should put your personal preferences.
 
-1.  **Package Default:** Located within the tool's installation directory. This provides sensible defaults (like excluding `node_modules`, `venv`, etc.).
-2.  **Global:** Your home directory (`~/.text_aggregator.json`). This allows you to set your personal preferences across all projects.
+#### Configuration Keys
+| Key | Type | Description |
+| :--- | :--- | :--- |
+| `exclude_directories` | `list` | Directory names to skip (e.g., `["venv", "node_modules"]`). |
+| `include_extensions` | `list` | Extensions to include (e.g., `["py", "txt"]`). |
+| `exclude_extensions` | `list` | Extensions to ignore (e.g., `["log"]`). |
+| `output_file` | `string`\|`null` | Default file path for output. |
+| `no_copy` | `boolean` | If `true`, disables clipboard copy by default. |
+| `stdout` | `boolean` | If `true`, prints to terminal by default. |
 
-**Example `.text_aggregator.json`:**
+**Example `~/.text_aggregator.json`:**
 ```json
 {
   "exclude_directories": ["node_modules", "venv", "dist", "custom_ignore"],
@@ -128,30 +140,19 @@ You can customize the tool's default behavior using a `.text_aggregator.json` fi
 }
 ```
 
-*   `output_file`: (string/null) Default path to write output to.
-*   `no_copy`: (boolean) If true, disables clipboard copying by default.
-*   `stdout`: (boolean) If true, prints to standard output by default.
-
 **Precedence:**
-Command-line arguments **>** Global Config (`~/`) **>** Package Default.
-
-*Note: Global configuration overrides package defaults. Configuration in the current working directory is not supported to ensure consistent behavior regardless of where you run the tool.*
+`Command-line arguments` **>** `Global Config (~/)` **>** `Package Default`
 
 ### Examples
 
-**1. Aggregate Python and Markdown files (using short flags):**
+**1. Aggregate Python and Markdown files (using comma-separated extensions):**
 ```bash
-text-aggregator "**/*" -i py md
+text-aggregator -i py,md
 ```
 
-**2. Exclude log files and a custom directory:**
+**2. Exclude log and temporary files:**
 ```bash
-text-aggregator "logs/**" -e log -d archive
-```
-
-**3. Save to a file instead of clipboard:**
-```bash
-text-aggregator "src/**/*.js" -o all_scripts.js
+text-aggregator -e log,tmp
 ```
 
 ### Headless Environments (VS Code Remote, SSH, Docker)
@@ -221,3 +222,8 @@ The project includes a suite of unit tests. To run them, navigate to the `text_a
 ```bash
 python3 -m unittest tests/test_aggregator.py
 ```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
+
