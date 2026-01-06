@@ -33,7 +33,7 @@ The fastest way to get running:
 You can install the tool directly from the source code.
 
 #### User Installation (Recommended)
-This installs the `command-reloader` command to your local bin directory.
+This installs `command-reloader` and `command-trigger-listener`.
 
 ```bash
 pip install .
@@ -53,6 +53,7 @@ If you are on a managed system where you cannot install packages globally, you c
 1.  **Add Alias:** Add these to your `~/.bashrc` (adjust the path):
     ```bash
     alias command-reloader="python3 /path/to/intr_dev_tools/command_reloader_tool/command_reloader/reloader.py"
+    alias command-trigger-listener="python3 /path/to/intr_dev_tools/command_reloader_tool/command_reloader/listener.py"
     alias cr="command-reloader"
     ```
 2.  **Reload:**
@@ -133,23 +134,26 @@ This guide shows how to set up automatic browser refreshing when you develop on 
 >
 > **BEFORE** running the listener:
 > 1. Open the **"Ports"** tab in VS Code (bottom panel).
-> 2. Find port `9999` and right-click -> **"Unforward Port"**.
+> 2. Find port `9999` and right-click -> **"Unforward Port."**
 > 3. Ideally, disable `remote.ports.autoForward` in your settings or add `"remote.ports.attributes": { "9999": { "onAutoForward": "ignore" } }` to your `settings.json`.
 
 You need to run a small script on your **local machine** that listens for the refresh signal.
 
-**Download or Copy the script for your OS:**
-
-*   **MacOS (Chrome):** [listeners/mac_listener.py](listeners/mac_listener.py)
-*   **Linux (Chrome):** [listeners/linux_listener.py](listeners/linux_listener.py) (Requires `xdotool`)
-
-**Run it:**
+**Option A: Install the Tool (Recommended)**
+If you have Python installed locally:
 ```bash
-# Default (Listens on 9999, Refreshes localhost:8080)
-python3 mac_listener.py
+pip install . 
+# OR use the alias if you copied the repo locally
+command-trigger-listener --port 9999 --app-port 8080
+```
 
-# Custom App Port (if your app is on 3000)
-python3 mac_listener.py --app-port 3000
+**Option B: No Install (Copy-Paste Scripts)**
+Download or copy one of these standalone scripts:
+*   **MacOS (Chrome):** [listeners/mac_listener.py](listeners/mac_listener.py)
+*   **Linux (Chrome):** [listeners/linux_listener.py](listeners/linux_listener.py)
+
+```bash
+python3 mac_listener.py --app-port 8080
 ```
 
 ### 2. Connect via SSH
@@ -168,31 +172,6 @@ cr --wait-for-port 8080 \
    --webhook-url http://localhost:9999 \
    -- bazel run //my:target
 ```
-
----
-
-## Troubleshooting: VS Code Port Forwarding Conflicts
-
-If you use VS Code Remote (SSH), its **"Automatic Port Forwarding"** feature may conflict with this tool by grabbing port `9999` before your local listener can start.
-
-### The Symptoms
-- Local listener fails with: `OSError: [Errno 48] Address already in use`.
-- Running `lsof -i :9999` shows "Visual Studio Code" as the process owner.
-
-### How to Fix
-1.  **Stop the Auto-Forward:** Open the **"Ports"** view in VS Code (bottom panel), right-click port `9999`, and select **"Unforward Port."**
-2.  **Disable Auto-Forwarding (Recommended):**
-    - Open VS Code Settings (`Cmd + ,`).
-    - Search for `remote.ports.autoForward` and uncheck it.
-3.  **Configure Attributes (Best of both worlds):**
-    Add this to your `settings.json` to ignore port `9999` while keeping auto-forward for others:
-    ```json
-    "remote.ports.attributes": {
-        "9999": {
-            "onAutoForward": "ignore"
-        }
-    }
-    ```
 
 ## Usage as a Python Module
 
