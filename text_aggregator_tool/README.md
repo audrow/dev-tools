@@ -147,9 +147,33 @@ Run this command to create a basic configuration in your home directory:
 ```bash
 cat <<EOF > ~/.text_aggregator.json
 {
-  "exclude_directories": ["node_modules", "venv", ".venv", "__pycache__", ".git", "build", "dist"],
+  "exclude_directories": [
+    "node_modules",
+    "venv",
+    ".venv",
+    "__pycache__",
+    ".git",
+    ".vscode",
+    ".angular",
+    "dist",
+    "build",
+    "coverage",
+    "bazel-bin",
+    "bazel-out",
+    "bazel-testlogs",
+    "bazel-genfiles"
+  ],
   "include_extensions": [],
-  "exclude_extensions": [],
+  "exclude_extensions": [
+    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg", ".webp", ".ico", ".tiff",
+    ".eot", ".woff", ".woff2", ".ttf", ".otf",
+    ".mp3", ".wav", ".mp4", ".mov", ".avi",
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".zip", ".tar", ".gz", ".rar", ".7z",
+    ".exe", ".dll", ".so", ".dylib", ".class", ".o", ".obj",
+    ".pyc", ".pyo", ".pyd",
+    ".DS_Store"
+  ],
   "output_file": null,
   "no_copy": false,
   "stdout": false
