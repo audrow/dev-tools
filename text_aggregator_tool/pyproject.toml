@@ -17,7 +17,6 @@ dependencies = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
@@ -27,6 +26,9 @@ classifiers = [
 
 [project.scripts]
 text-aggregator = "text_aggregator.aggregator:main"
+
+[tool.setuptools.packages.find]
+include = ["text_aggregator*"]
 
 [tool.setuptools.package-data]
 text_aggregator = ["*.json"]

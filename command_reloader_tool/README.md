@@ -25,7 +25,7 @@ The fastest way to get running:
 
 ### Prerequisites
 
-- Python 3.7+
+- Python 3.8+
 - Git
 
 ### Install with pip
@@ -130,7 +130,9 @@ This guide shows how to set up automatic browser refreshing when you develop on 
 
 > **⚠️ VS CODE USERS: READ THIS FIRST**
 >
-> If you use VS Code Remote (SSH), it will try to **automatically forward port 9999** from the remote to your local machine. This will block your local listener from starting ("Address already in use").
+> If you use VS Code Remote (SSH), it has a feature that **scans your terminal output** for port numbers. When you run a command mentioning port `9999` (like the examples below), VS Code aggressively auto-forwards it from Remote -> Local.
+>
+> This creates a conflict because we need the port open **Locally** to listen for the remote signal. The auto-forward blocks your local listener with "Address already in use".
 >
 > **BEFORE** running the listener:
 > 1. Open the **"Ports"** tab in VS Code (bottom panel).
