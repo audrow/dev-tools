@@ -2,6 +2,8 @@
 
 A simple text aggregator that takes a path (supports wildcards `**` and `*`) and file extensions to include or exclude, and puts all of the text into either a file or the user's clipboard (clipboard by default).
 
+This tool is designed to make working with Large Language Models (LLMs) easier by allowing you to quickly gather and copy context from your codebase to use in prompts.
+
 ## Quickstart
 
 The fastest way to get running on any system:
