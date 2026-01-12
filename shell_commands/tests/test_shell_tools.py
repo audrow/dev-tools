@@ -15,6 +15,8 @@ class TestShellTools(unittest.TestCase):
         self.test_dir = tempfile.mkdtemp()
         self.cwd = os.getcwd()
         os.chdir(self.test_dir)
+        self.original_home = os.environ.get("HOME")
+        os.environ["HOME"] = self.test_dir
 
         # Configure git for testing
         subprocess.check_call(
@@ -27,6 +29,11 @@ class TestShellTools(unittest.TestCase):
 
     def tearDown(self):
         os.chdir(self.cwd)
+        if self.original_home:
+            os.environ["HOME"] = self.original_home
+        else:
+            if "HOME" in os.environ:
+                del os.environ["HOME"]
         shutil.rmtree(self.test_dir)
 
     def run_bash(self, command, cwd=None):
@@ -90,28 +97,10 @@ class TestShellTools(unittest.TestCase):
 
     def test_wta_create_new_branch(self):
         self.setup_repo()
-        # Create worktrees directory structure that wta expects (~/.worktrees/repo/...)
-        # But wta uses $HOME. We should mock HOME or modify wta to be testable.
-        # Ideally wta should allow overriding base dir.
-        # For now, let's override HOME for the subprocess.
+        # wta uses $HOME to determine where to put worktrees (~/.worktrees).
+        # We have mocked HOME to be self.test_dir in setUp.
 
-        fake_home = Path(self.test_dir) / "fake_home"
-        fake_home.mkdir()
-
-        # We need to run this with modified env
-        full_command = (
-            f"export HOME={fake_home} && source {INIT_SCRIPT} && wta new-feature"
-        )
-
-        # We need fzf for wta? No, wta <branch> doesn't use fzf. wt does.
-        # But we need to make sure we are in a repo.
-
-        res = subprocess.run(
-            ["bash", "-c", full_command],
-            cwd=self.test_dir,
-            capture_output=True,
-            text=True,
-        )
+        res = self.run_bash("wta new-feature")
 
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Created new branch", res.stdout)
