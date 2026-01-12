@@ -2,10 +2,21 @@
 
 This repository is a collection of tools to support and streamline development workflows.
 
+## Quick Setup
+
+Run the interactive setup script to configure your shell and install dependencies:
+
+```bash
+./setup.sh
+```
+
 ## Tools
 
-*   [**Text Aggregator**](./text_aggregator_tool/README.md): A command-line tool to find and combine text from multiple files into a single file or the clipboard. Designed to make working with LLMs easier by quickly gathering context from your codebase.
-*   [**Command Reloader**](./command_reloader_tool/README.md): A smart watcher that restarts a command when git-tracked files change. Features debounce, port/regex waiting, and remote trigger support for browser refreshing.
+*   [**Shell Commands**](./shell_commands/README.md): A suite of productivity aliases and functions for Git and workflow automation. Includes `glog`, `wt` (worktree manager), `gupdate`, and aliases for the Python tools below.
+*   [**Text Aggregator**](./text_aggregator_tool/README.md): A command-line tool to find and combine text from multiple files into a single file or the clipboard. Designed to make working with LLMs easier.
+    *   *Alias:* `text-aggregator`
+*   [**Command Reloader**](./command_reloader_tool/README.md): A smart watcher that restarts a command when git-tracked files change. Features debounce, port/regex waiting, and remote trigger support.
+    *   *Aliases:* `command-reloader`, `cr`, `command-trigger-listener`
 
 ## Development
 
