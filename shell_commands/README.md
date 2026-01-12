@@ -89,6 +89,15 @@ Convenient wrappers for the Python tools in this repository. These allow you to 
 
 You can add new scripts to this directory. To make them active, ensure they are sourced in `init.sh`.
 
+## Testing
+
+The shell tools are tested using a Python-based test suite that verifies the functionality of the aliases and workflow scripts in a real (temporary) Git environment.
+
+To run the tests:
+```bash
+python3 -m unittest tests/test_shell_tools.py
+```
+
 ---
 
 ## License
