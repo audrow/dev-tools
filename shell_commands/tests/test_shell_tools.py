@@ -124,75 +124,98 @@ class TestShellTools(unittest.TestCase):
         subprocess.check_call(["git", "commit", "-m", "Remote commit"], cwd=setup_path)
         subprocess.check_call(["git", "push", "origin", "main"], cwd=setup_path)
 
-        # 2. Make local changes (staged)
+        # 2. Make local changes (committed) to create a divergence
         (local_path / "local.txt").write_text("Local changes")
         subprocess.check_call(["git", "add", "."], cwd=local_path)
+        subprocess.check_call(["git", "commit", "-m", "Local commit"], cwd=local_path)
 
         # 3. Run gupdate
         res = self.run_bash("gupdate", cwd=local_path)
         self.assertEqual(res.returncode, 0, f"gupdate failed: {res.stderr}")
 
-        # 4. Verify rebase (we should see Remote commit)
+        # 4. Verify merge (we should see Remote commit and Local commit)
         res_log = subprocess.run(
             ["git", "log", "--oneline"], cwd=local_path, capture_output=True, text=True
         )
         self.assertIn("Remote commit", res_log.stdout)
+        self.assertIn("Local commit", res_log.stdout)
+        # Verify a merge happened (default logic creates a merge commit or fast-forwards)
+        # Since we had local commits, it should be a merge commit unless we rebased (which we removed).
+        # Depending on git config, it might be a merge commit.
+        # "Merge remote-tracking branch 'origin/main'" is standard default message
+        self.assertIn("Merge remote-tracking branch 'origin/main'", res_log.stdout)
 
-        # 5. Verify stash popped (local.txt should be there and staged)
-        status = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=local_path,
-            capture_output=True,
-            text=True,
-        )
-        self.assertIn("A  local.txt", status.stdout)
-
-    def test_grestack(self):
+    def test_gmb(self):
         local_path, origin_path = self.setup_remote_and_clone()
-
-        # Setup stack: main -> parent -> child
-
-        # Create parent branch and push
-        subprocess.check_call(["git", "checkout", "-b", "parent"], cwd=local_path)
-        (local_path / "parent.txt").write_text("Parent content")
-        subprocess.check_call(["git", "add", "."], cwd=local_path)
-        subprocess.check_call(["git", "commit", "-m", "Parent commit"], cwd=local_path)
-        subprocess.check_call(["git", "push", "-u", "origin", "parent"], cwd=local_path)
-
-        # Create child branch
-        subprocess.check_call(["git", "checkout", "-b", "child"], cwd=local_path)
-        (local_path / "child.txt").write_text("Child content")
-        subprocess.check_call(["git", "add", "."], cwd=local_path)
-        subprocess.check_call(["git", "commit", "-m", "Child commit"], cwd=local_path)
-
-        # Squash merge parent into main (on origin)
-        # We simulate this by checking out main, checking out parent files, committing.
+        
+        # Create a branch off main
+        subprocess.check_call(["git", "checkout", "-b", "feature"], cwd=local_path)
+        
+        # Add commit to main (on origin)
         setup_path = Path(self.test_dir) / "setup_repo"
-        subprocess.check_call(["git", "checkout", "main"], cwd=setup_path)
-        (setup_path / "parent.txt").write_text("Parent content")
+        (setup_path / "new.txt").write_text("New file")
         subprocess.check_call(["git", "add", "."], cwd=setup_path)
-        subprocess.check_call(
-            ["git", "commit", "-m", "Squashed parent"], cwd=setup_path
-        )
+        subprocess.check_call(["git", "commit", "-m", "Main update"], cwd=setup_path)
         subprocess.check_call(["git", "push", "origin", "main"], cwd=setup_path)
+        
+        # Fetch in local so we know about origin/main update
+        subprocess.check_call(["git", "fetch", "origin"], cwd=local_path)
 
-        # Now back to local. 'child' is based on 'parent' (old hash).
-        # main has 'Squashed parent' (new hash).
-        # grestack parent main should rebase child onto main, dropping parent commit.
+        # Add commit to feature
+        (local_path / "feature.txt").write_text("Feature file")
+        subprocess.check_call(["git", "add", "."], cwd=local_path)
+        subprocess.check_call(["git", "commit", "-m", "Feature commit"], cwd=local_path)
 
-        res = self.run_bash("grestack parent origin/main", cwd=local_path)
-        self.assertEqual(res.returncode, 0, f"grestack failed: {res.stderr}")
+        # gmb main should return the hash of the initial commit (common ancestor)
+        # We can get the initial commit hash easily
+        initial_hash = subprocess.check_output(
+            ["git", "rev-list", "--max-parents=0", "HEAD"], 
+            cwd=local_path, text=True
+        ).strip()
 
-        # Verify history: Should have Child commit and Squashed parent. Should NOT have old Parent commit.
-        log = subprocess.run(
-            ["git", "log", "--oneline"], cwd=local_path, capture_output=True, text=True
-        )
-        self.assertIn("Child commit", log.stdout)
-        self.assertIn("Squashed parent", log.stdout)
-        # Since we squashed, the message "Parent commit" shouldn't be there (unless we check message, but hashes differ)
-        # However, git log output is just strings. "Parent commit" was the message of the old commit.
-        # "Squashed parent" is the new one.
-        self.assertNotIn("Parent commit", log.stdout)
+        res = self.run_bash("gmb main", cwd=local_path)
+        self.assertEqual(res.returncode, 0)
+        self.assertEqual(res.stdout.strip(), initial_hash)
+
+    def test_gdiff_out(self):
+        self.setup_repo()
+        # Mock Downloads dir
+        downloads = Path(self.test_dir) / "Downloads"
+        downloads.mkdir()
+
+        # Make changes
+        Path("diff_me.txt").write_text("Diff content")
+        subprocess.check_call(["git", "add", "diff_me.txt"], cwd=self.test_dir)
+        
+        # gdiff_out --cached
+        # Branch is 'main' -> file should be git-main.diff
+        res = self.run_bash("gdiff_out --cached", cwd=self.test_dir)
+        self.assertEqual(res.returncode, 0)
+        
+        outfile = downloads / "git-main.diff"
+        self.assertTrue(outfile.exists())
+        self.assertIn("diff --git a/diff_me.txt", outfile.read_text())
+
+    def test_gdmb(self):
+        local_path, origin_path = self.setup_remote_and_clone()
+        downloads = Path(self.test_dir) / "Downloads"
+        downloads.mkdir()
+
+        # Create feature branch
+        subprocess.check_call(["git", "checkout", "-b", "feature/test"], cwd=local_path)
+        (local_path / "feat.txt").write_text("Feature")
+        subprocess.check_call(["git", "add", "."], cwd=local_path)
+        subprocess.check_call(["git", "commit", "-m", "Feature commit"], cwd=local_path)
+
+        # gdmb main
+        # Should diff against origin/main (which is the parent)
+        # Output file should be git-feature-test.diff
+        res = self.run_bash("gdmb main", cwd=local_path)
+        self.assertEqual(res.returncode, 0, f"gdmb failed: {res.stderr}")
+
+        outfile = downloads / "git-feature-test.diff"
+        self.assertTrue(outfile.exists())
+        self.assertIn("diff --git a/feat.txt", outfile.read_text())
 
 
 if __name__ == "__main__":
