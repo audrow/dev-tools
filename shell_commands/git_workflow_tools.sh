@@ -112,8 +112,44 @@ grestack() {
         echo "✅ Successfully restacked."
         echo "🚀 You likely need to force push now:"
         echo "   git push --force-with-lease"
+        else
+            echo "❌ Rebase failed."
+            echo "   Resolve conflicts and run 'git rebase --continue' or 'git rebase --abort'."
+        fi
+    }
+    
+    # GMB: Find merge-base between origin/main (or master) and HEAD
+    # Usage: gmb [base_branch]
+    gmb() {
+        local base_branch="${1:-main}"
+        local remote_ref="origin/$base_branch"
+        
+        if ! git rev-parse --verify "$remote_ref" &>/dev/null; then
+             if [ "$base_branch" == "main" ] && git rev-parse --verify "origin/master" &>/dev/null; then
+                 remote_ref="origin/master"
+             fi
+        fi
+        
+        git merge-base "$remote_ref" HEAD
+    }
+    
+# GDIFF_OUT: Diff and save to ~/Downloads/git.diff
+# Usage: gdiff_out [git diff arguments]
+gdiff_out() {
+    git diff "$@" > ~/Downloads/git.diff
+    echo "💾 Diff saved to ~/Downloads/git.diff"
+}
+
+# GDMB: Diff from merge-base with origin/main and save to ~/Downloads/git.diff
+# Usage: gdmb [base_branch]
+gdmb() {
+    local base=$(gmb "$1")
+    if [ -n "$base" ]; then
+        git diff "$base" > ~/Downloads/git.diff
+        echo "💾 Diff from merge-base ($base) saved to ~/Downloads/git.diff"
     else
-        echo "❌ Rebase failed."
-        echo "   Resolve conflicts and run 'git rebase --continue' or 'git rebase --abort'."
+        echo "❌ Could not find merge-base."
+        return 1
     fi
 }
+    

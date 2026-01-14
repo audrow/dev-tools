@@ -67,6 +67,9 @@ Advanced workflow automation.
 | :--- | :--- | :--- |
 | `gupdate` | `gupdate [base]` | Safely updates your branch: **Stash** -> **Fetch** -> **Rebase** on `origin/[base]` -> **Pop Stash**. |
 | `grestack` | `grestack <old_parent> [new_base]` | Fixes stacked PRs after a squash merge. Transplants commits from the current branch onto `new_base` (default: `origin/main`), skipping commits from `old_parent`. |
+| `gmb` | `gmb [base]` | Finds the merge-base between `origin/[base]` and `HEAD`. Automatically falls back to `master` if `main` is missing. |
+| `gdiff_out` | `gdiff_out [args]` | Runs `git diff [args]` and saves the output to `~/Downloads/git.diff`. Useful for copying diffs over SSH. |
+| `gdmb` | `gdmb [base]` | Combines `gmb` and `gdiff_out`. Diffs from the merge-base of `origin/[base]` and saves to `~/Downloads/git.diff`. |
 
 ### Python Tools Aliases (`python_tools.sh`)
 
