@@ -147,17 +147,17 @@ class TestShellTools(unittest.TestCase):
 
     def test_gmb(self):
         local_path, origin_path = self.setup_remote_and_clone()
-        
+
         # Create a branch off main
         subprocess.check_call(["git", "checkout", "-b", "feature"], cwd=local_path)
-        
+
         # Add commit to main (on origin)
         setup_path = Path(self.test_dir) / "setup_repo"
         (setup_path / "new.txt").write_text("New file")
         subprocess.check_call(["git", "add", "."], cwd=setup_path)
         subprocess.check_call(["git", "commit", "-m", "Main update"], cwd=setup_path)
         subprocess.check_call(["git", "push", "origin", "main"], cwd=setup_path)
-        
+
         # Fetch in local so we know about origin/main update
         subprocess.check_call(["git", "fetch", "origin"], cwd=local_path)
 
@@ -169,8 +169,7 @@ class TestShellTools(unittest.TestCase):
         # gmb main should return the hash of the initial commit (common ancestor)
         # We can get the initial commit hash easily
         initial_hash = subprocess.check_output(
-            ["git", "rev-list", "--max-parents=0", "HEAD"], 
-            cwd=local_path, text=True
+            ["git", "rev-list", "--max-parents=0", "HEAD"], cwd=local_path, text=True
         ).strip()
 
         res = self.run_bash("gmb main", cwd=local_path)
@@ -186,12 +185,12 @@ class TestShellTools(unittest.TestCase):
         # Make changes
         Path("diff_me.txt").write_text("Diff content")
         subprocess.check_call(["git", "add", "diff_me.txt"], cwd=self.test_dir)
-        
+
         # gdiff_out --cached
         # Branch is 'main' -> file should be git-main.diff
         res = self.run_bash("gdiff_out --cached", cwd=self.test_dir)
         self.assertEqual(res.returncode, 0)
-        
+
         outfile = downloads / "git-main.diff"
         self.assertTrue(outfile.exists())
         self.assertIn("diff --git a/diff_me.txt", outfile.read_text())

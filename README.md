@@ -18,22 +18,28 @@ Run the interactive setup script to configure your shell and install dependencie
 *   [**Command Reloader**](./command_reloader_tool/README.md): A smart watcher that restarts a command when git-tracked files change. Features debounce, port/regex waiting, and remote trigger support.
     *   *Aliases:* `command-reloader`, `cr`, `command-trigger-listener`
 
-## Development
+## Contributing
 
-We use `black` for code formatting. You can run it on the whole repository or individual tools.
+Contributions are welcome! To ensure code quality and consistency, please run the following script before submitting any changes:
 
-**To format the code:**
+```bash
+./check_all.sh
+```
 
-1.  **Install Black:**
-    ```bash
-    pip install black
-    ```
+This script will:
+1.  Set up a local development environment (`.venv`).
+2.  Format the code using `black`.
+3.  Run the full test suite for all shell tools and Python utilities.
 
-2.  **Run Black:**
-    ```bash
-    # Run on the whole repo
-    black .
-    ```
+### Code Style
+We follow the standard [Black](https://github.com/psf/black) code style for Python.
+
+### Adding New Tools
+If you add a new tool, please:
+1.  Include a `README.md` in the tool's directory.
+2.  Add tests in a `tests/` subdirectory.
+3.  Update `check_all.sh` to include your new tests.
+4.  Update the root `README.md` and `shell_commands/` as appropriate.
 
 ## License
 
