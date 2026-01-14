@@ -1,13 +1,14 @@
 #!/bin/bash
 
+# Directory where git diffs will be saved
+GDIFF_DIR="${GDIFF_DIR:-$HOME/Downloads}"
+
 # GUPDATE: Update current branch with main (or specified branch)
-# Safely stashes changes, rebases, and pops changes.
+# Fetches origin and merges the base branch into the current branch.
 # Usage: gupdate [base_branch]
 gupdate() {
     local base_branch="${1:-main}"
     local current_branch=$(git branch --show-current)
-    local stash_name="gupdate-auto-stash-$(date +%s)"
-    local stashed=0
 
     # Check if we are on a branch
     if [ -z "$current_branch" ]; then
@@ -15,20 +16,11 @@ gupdate() {
         return 1
     fi
 
-    # 1. Check for changes and stash if necessary
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "📦 Stashing local changes..."
-        git stash push -m "$stash_name"
-        stashed=1
-    else
-        echo "✨ Working directory is clean."
-    fi
-
-    # 2. Fetch and Rebase
+    # 1. Fetch
     echo "🔄 Fetching origin..."
     git fetch origin --quiet
 
-    # Determine remote branch to rebase on
+    # Determine remote branch to merge
     local remote_ref="origin/$base_branch"
     
     # Check if remote branch exists
@@ -39,33 +31,17 @@ gupdate() {
              echo "⚠️ 'origin/main' not found, using 'origin/master'."
          else
              echo "❌ Remote branch '$remote_ref' not found."
-             # If we stashed, pop it back to restore state
-             if [ $stashed -eq 1 ]; then
-                 echo "🔙 Restoring stash due to error..."
-                 git stash pop
-             fi
              return 1
          fi
     fi
 
-    echo "🚀 Rebasing '$current_branch' onto '$remote_ref'..."
-    if git rebase "$remote_ref"; then
-        echo "✅ Rebase successful."
+    echo "🚀 Merging '$remote_ref' into '$current_branch'..."
+    if git merge "$remote_ref"; then
+        echo "✅ Merge successful."
     else
-        echo "❌ Rebase failed (conflict?)."
-        echo "   Fix conflicts and run 'git rebase --continue' or 'git rebase --abort'."
-        echo "   If you abort, remember to run 'git stash pop' if you had local changes."
+        echo "❌ Merge failed (conflict?)."
+        echo "   Fix conflicts and commit the result."
         return 1
-    fi
-
-    # 3. Pop Stash
-    if [ $stashed -eq 1 ]; then
-        echo "📦 Popping stash..."
-        if git stash pop; then
-             echo "✅ Stash applied successfully."
-        else
-             echo "⚠️ Stash pop had conflicts or failed. Check 'git status'."
-        fi
     fi
 }
 
@@ -133,20 +109,27 @@ grestack() {
         git merge-base "$remote_ref" HEAD
     }
     
-# GDIFF_OUT: Diff and save to ~/Downloads/git.diff
+# GDIFF_OUT: Diff and save to a file
 # Usage: gdiff_out [git diff arguments]
 gdiff_out() {
-    git diff "$@" > ~/Downloads/git.diff
-    echo "💾 Diff saved to ~/Downloads/git.diff"
+    local current_branch=$(git branch --show-current)
+    if [ -z "$current_branch" ]; then
+        current_branch="HEAD"
+    fi
+    # Replace / with -
+    local safe_branch="${current_branch//\//-}"
+    local outfile="${GDIFF_DIR}/git-${safe_branch}.diff"
+
+    git diff "$@" > "$outfile"
+    echo "💾 Diff saved to $outfile"
 }
 
-# GDMB: Diff from merge-base with origin/main and save to ~/Downloads/git.diff
+# GDMB: Diff from merge-base with origin/main and save to ~/Downloads/git-<branch>.diff
 # Usage: gdmb [base_branch]
 gdmb() {
     local base=$(gmb "$1")
     if [ -n "$base" ]; then
-        git diff "$base" > ~/Downloads/git.diff
-        echo "💾 Diff from merge-base ($base) saved to ~/Downloads/git.diff"
+        gdiff_out "$base"
     else
         echo "❌ Could not find merge-base."
         return 1
