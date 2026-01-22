@@ -29,7 +29,7 @@ wta() {
   fi
 
   if [ -z "$1" ]; then
-    echo "Usage: wta <description|branch-name> [base-branch]"
+    echo "Usage: wta <description|branch-name> [--base|-b base-branch]"
     return 1
   fi
 
@@ -38,25 +38,39 @@ wta() {
   git fetch --all --quiet
 
   # 2. ARGUMENT PARSING
-  # Support "wta my feature branch" (multi-word description) vs "wta feature base"
-  local args=("$@")
   local input_text=""
   local base_branch="main"
+  local args=("$@")
+  local description_parts=()
 
-  if [ ${#args[@]} -gt 1 ]; then
-    local last_arg_index=$((${#args[@]} - 1))
-    local last_arg="${args[$last_arg_index]}"
-
-    # Check if last argument is a valid branch (local or remote)
-    if git rev-parse --verify "$last_arg" &>/dev/null || git rev-parse --verify "origin/$last_arg" &>/dev/null; then
-       base_branch="$last_arg"
-       unset 'args[$last_arg_index]'
-       input_text="${args[*]}"
-    else
-       input_text="${args[*]}"
+  local skip_next=false
+  for i in "${!args[@]}"; do
+    if [ "$skip_next" = true ]; then
+      skip_next=false
+      continue
     fi
-  else
-    input_text="$1"
+
+    local arg="${args[$i]}"
+    if [[ "$arg" == "--base" || "$arg" == "-b" ]]; then
+      # Make sure there is a next argument
+      local next_index=$((i + 1))
+      if [ -n "${args[$next_index]}" ]; then
+        base_branch="${args[$next_index]}"
+        skip_next=true
+      else
+        echo "❌ Error: --base option requires an argument."
+        return 1
+      fi
+    else
+      description_parts+=("$arg")
+    fi
+  done
+
+  input_text="${description_parts[*]}"
+
+  if [ -z "$input_text" ]; then
+    echo "❌ Error: No description or branch name provided."
+    return 1
   fi
 
   local main_repo_path=$(git worktree list | head -n 1 | awk '{print $1}')
