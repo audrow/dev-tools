@@ -257,17 +257,17 @@ class TestShellTools(unittest.TestCase):
     def test_wta_quoted_description_with_base(self):
         self.setup_repo()
         subprocess.check_call(["git", "branch", "base-feature"], cwd=self.test_dir)
-        
+
         description = "fixing bug"
         # "base-feature" is the base
         expected_branch = "testuser/fixing-bug"
-        
+
         # wta "fixing bug" base-feature
         res = self.run_bash(f'wta "{description}" base-feature')
-        
+
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
-        
+
         res_branch = subprocess.run(
             ["git", "branch"], cwd=self.test_dir, capture_output=True, text=True
         )
@@ -287,11 +287,11 @@ class TestShellTools(unittest.TestCase):
         self.setup_repo()
         # wta foo bar -> foo-bar (bar is not a branch)
         expected_branch = "testuser/foo-bar"
-        
-        res = self.run_bash('wta foo bar')
+
+        res = self.run_bash("wta foo bar")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
-        
+
         res_branch = subprocess.run(
             ["git", "branch"], cwd=self.test_dir, capture_output=True, text=True
         )
@@ -301,17 +301,17 @@ class TestShellTools(unittest.TestCase):
         self.setup_repo()
         # Create a base branch 'feature'
         subprocess.check_call(["git", "branch", "feature"], cwd=self.test_dir)
-        
+
         # wta fixing bug feature -> fixing-bug (based on feature)
         # "feature" is a valid branch, so it should be picked as base
         expected_branch = "testuser/fixing-bug"
-        
-        res = self.run_bash('wta fixing bug feature')
+
+        res = self.run_bash("wta fixing bug feature")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
         # Should imply based on feature (or HEAD of feature)
         # Since we just created feature from main, hash is same.
-        
+
         res_branch = subprocess.run(
             ["git", "branch"], cwd=self.test_dir, capture_output=True, text=True
         )
