@@ -26,6 +26,7 @@ class TestShellTools(unittest.TestCase):
         subprocess.check_call(
             ["git", "config", "--global", "init.defaultBranch", "main"]
         )
+        os.environ["GITHUB_USER"] = "testuser"
 
     def tearDown(self):
         os.chdir(self.cwd)
@@ -34,6 +35,10 @@ class TestShellTools(unittest.TestCase):
         else:
             if "HOME" in os.environ:
                 del os.environ["HOME"]
+
+        if "GITHUB_USER" in os.environ:
+            del os.environ["GITHUB_USER"]
+
         shutil.rmtree(self.test_dir)
 
     def run_bash(self, command, cwd=None):
@@ -104,6 +109,8 @@ class TestShellTools(unittest.TestCase):
 
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Created new branch", res.stdout)
+        # Check that it uses the user prefix
+        self.assertIn("testuser/new-feature", res.stdout)
 
         # Verify worktree created
         res_wt = subprocess.run(
@@ -215,6 +222,107 @@ class TestShellTools(unittest.TestCase):
         outfile = downloads / "git-feature-test.diff"
         self.assertTrue(outfile.exists())
         self.assertIn("diff --git a/feat.txt", outfile.read_text())
+
+    def test_wta_quoted_description_no_base(self):
+        self.setup_repo()
+
+        description = "ICON session opened when jogging in Initial world"
+        expected_folder = "icon-session-opened-when-jogging-in-initial-world"
+        expected_branch = "testuser/icon-session-opened-when-jogging-in-initial-world"
+
+        # Note: We need to pass the description in quotes in the bash command
+        res = self.run_bash(f'wta "{description}"')
+
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
+
+        # Verify worktree created
+        res_wt = subprocess.run(
+            ["git", "worktree", "list"],
+            cwd=self.test_dir,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn(expected_folder, res_wt.stdout)
+
+        # Verify branch exists
+        res_branch = subprocess.run(
+            ["git", "branch"],
+            cwd=self.test_dir,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn(expected_branch, res_branch.stdout)
+
+    def test_wta_quoted_description_with_base(self):
+        self.setup_repo()
+        subprocess.check_call(["git", "branch", "base-feature"], cwd=self.test_dir)
+
+        description = "fixing bug"
+        # "base-feature" is the base
+        expected_branch = "testuser/fixing-bug"
+
+        # wta "fixing bug" base-feature
+        res = self.run_bash(f'wta "{description}" base-feature')
+
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
+
+        res_branch = subprocess.run(
+            ["git", "branch"], cwd=self.test_dir, capture_output=True, text=True
+        )
+        self.assertIn(expected_branch, res_branch.stdout)
+
+    def test_wta_existing_branch_with_prefix(self):
+        self.setup_repo()
+        # Create branch testuser/foo
+        subprocess.check_call(["git", "branch", "testuser/foo"], cwd=self.test_dir)
+
+        # wta "foo" should checkout "testuser/foo"
+        res = self.run_bash('wta "foo"')
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn("Checked out existing branch: testuser/foo", res.stdout)
+
+    def test_wta_multi_word_description_no_quotes(self):
+        self.setup_repo()
+        # wta foo bar -> foo-bar (bar is not a branch)
+        expected_branch = "testuser/foo-bar"
+
+        res = self.run_bash("wta foo bar")
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
+
+        res_branch = subprocess.run(
+            ["git", "branch"], cwd=self.test_dir, capture_output=True, text=True
+        )
+        self.assertIn(expected_branch, res_branch.stdout)
+
+    def test_wta_multi_word_description_with_base_branch(self):
+        self.setup_repo()
+        # Create a base branch 'feature'
+        subprocess.check_call(["git", "branch", "feature"], cwd=self.test_dir)
+
+        # wta fixing bug feature -> fixing-bug (based on feature)
+        # "feature" is a valid branch, so it should be picked as base
+        expected_branch = "testuser/fixing-bug"
+
+        res = self.run_bash("wta fixing bug feature")
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
+        # Should imply based on feature (or HEAD of feature)
+        # Since we just created feature from main, hash is same.
+
+        res_branch = subprocess.run(
+            ["git", "branch"], cwd=self.test_dir, capture_output=True, text=True
+        )
+        self.assertIn(expected_branch, res_branch.stdout)
+
+    def test_wta_fails_if_github_user_not_set(self):
+        self.setup_repo()
+        del os.environ["GITHUB_USER"]
+        res = self.run_bash('wta "foo"')
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("Error: GITHUB_USER environment variable is not set", res.stdout)
 
 
 if __name__ == "__main__":
