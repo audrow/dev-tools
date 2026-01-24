@@ -813,5 +813,147 @@ class TestZshCompatibility(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f"Got error: {res.stderr}\n{res.stdout}")
 
 
+class TestSkipWorktree(unittest.TestCase):
+    """Tests for gskip, gunskip, and gskipped commands."""
+
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.cwd = os.getcwd()
+        os.chdir(self.test_dir)
+        self.original_home = os.environ.get("HOME")
+        os.environ["HOME"] = self.test_dir
+
+        # Configure git for testing
+        subprocess.check_call(
+            ["git", "config", "--global", "user.email", "you@example.com"]
+        )
+        subprocess.check_call(["git", "config", "--global", "user.name", "Your Name"])
+        subprocess.check_call(
+            ["git", "config", "--global", "init.defaultBranch", "main"]
+        )
+
+    def tearDown(self):
+        os.chdir(self.cwd)
+        if self.original_home:
+            os.environ["HOME"] = self.original_home
+        else:
+            if "HOME" in os.environ:
+                del os.environ["HOME"]
+        shutil.rmtree(self.test_dir)
+
+    def run_bash(self, command, cwd=None, input_text=None):
+        """Runs a bash command with the tools sourced."""
+        if cwd is None:
+            cwd = self.test_dir
+
+        full_command = f"source {INIT_SCRIPT} && {command}"
+        result = subprocess.run(
+            ["bash", "-c", full_command],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            input=input_text,
+        )
+        return result
+
+    def setup_repo(self):
+        """Sets up a basic git repo with a tracked file."""
+        subprocess.check_call(["git", "init"], cwd=self.test_dir)
+        Path(self.test_dir, "README.md").write_text("# Test Repo")
+        Path(self.test_dir, "settings.json").write_text('{"color": "blue"}')
+        subprocess.check_call(["git", "add", "."], cwd=self.test_dir)
+        subprocess.check_call(
+            ["git", "commit", "-m", "Initial commit"], cwd=self.test_dir
+        )
+
+    def test_gskip_with_file_argument(self):
+        """Test that gskip marks a file as skip-worktree when given an argument."""
+        self.setup_repo()
+
+        res = self.run_bash("gskip settings.json", input_text="")
+        self.assertEqual(res.returncode, 0, f"gskip failed: {res.stderr}")
+        self.assertIn("Skipping: settings.json", res.stdout)
+
+        # Verify the file is marked as skip-worktree
+        result = subprocess.run(
+            ["git", "ls-files", "-v"],
+            cwd=self.test_dir,
+            capture_output=True,
+            text=True,
+        )
+        # 'S' prefix indicates skip-worktree
+        self.assertIn("S settings.json", result.stdout)
+
+    def test_gskip_untracked_file(self):
+        """Test that gskip fails gracefully for untracked files."""
+        self.setup_repo()
+        Path(self.test_dir, "untracked.txt").write_text("not tracked")
+
+        res = self.run_bash("gskip untracked.txt", input_text="")
+        self.assertIn("not tracked by git", res.stdout)
+
+    def test_gskip_nonexistent_file(self):
+        """Test that gskip fails gracefully for non-existent files."""
+        self.setup_repo()
+
+        res = self.run_bash("gskip nonexistent.txt", input_text="")
+        self.assertIn("not found", res.stdout)
+
+    def test_gunskip_with_file_argument(self):
+        """Test that gunskip removes skip-worktree flag when given an argument."""
+        self.setup_repo()
+
+        # First skip the file
+        subprocess.run(
+            ["git", "update-index", "--skip-worktree", "settings.json"],
+            cwd=self.test_dir,
+        )
+
+        # Then unskip it
+        res = self.run_bash("gunskip settings.json", input_text="")
+        self.assertEqual(res.returncode, 0, f"gunskip failed: {res.stderr}")
+        self.assertIn("Tracking: settings.json", res.stdout)
+
+        # Verify the file is no longer skip-worktree
+        result = subprocess.run(
+            ["git", "ls-files", "-v"],
+            cwd=self.test_dir,
+            capture_output=True,
+            text=True,
+        )
+        # 'H' prefix indicates normal tracked file
+        self.assertIn("H settings.json", result.stdout)
+
+    def test_gskipped_lists_skipped_files(self):
+        """Test that gskipped lists files marked as skip-worktree."""
+        self.setup_repo()
+
+        # Skip a file
+        subprocess.run(
+            ["git", "update-index", "--skip-worktree", "settings.json"],
+            cwd=self.test_dir,
+        )
+
+        res = self.run_bash("gskipped", input_text="")
+        self.assertEqual(res.returncode, 0, f"gskipped failed: {res.stderr}")
+        self.assertIn("settings.json", res.stdout)
+
+    def test_gskipped_no_skipped_files(self):
+        """Test that gskipped shows message when no files are skipped."""
+        self.setup_repo()
+
+        res = self.run_bash("gskipped", input_text="")
+        self.assertEqual(res.returncode, 0, f"gskipped failed: {res.stderr}")
+        self.assertIn("No files are currently marked", res.stdout)
+
+    def test_gskip_multiple_files(self):
+        """Test that gskip can mark multiple files at once."""
+        self.setup_repo()
+
+        res = self.run_bash("gskip settings.json README.md", input_text="")
+        self.assertEqual(res.returncode, 0, f"gskip failed: {res.stderr}")
+        self.assertIn("Marked 2 file(s)", res.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

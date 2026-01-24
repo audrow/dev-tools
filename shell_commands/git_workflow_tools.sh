@@ -118,15 +118,14 @@ gdmbo() {
 # Usage: gskip [file...]
 # If no files provided, uses fzf to select from tracked files
 gskip() {
-    if ! command -v fzf &> /dev/null; then
-        echo "❌ Error: fzf is not installed. Please install fzf to use interactive selection."
-        echo "   Alternatively, provide file paths as arguments: gskip <file1> [file2] ..."
-        return 1
-    fi
-
     local files=("$@")
 
     if [ ${#files[@]} -eq 0 ]; then
+        if ! command -v fzf &> /dev/null; then
+            echo "❌ Error: fzf is not installed. Please install fzf to use interactive selection."
+            echo "   Alternatively, provide file paths as arguments: gskip <file1> [file2] ..."
+            return 1
+        fi
         # Interactive selection with fzf
         echo "🔍 Select files to ignore (TAB to multi-select, ENTER to confirm):"
         local selected
@@ -145,12 +144,20 @@ gskip() {
 
     local count=0
     for file in "${files[@]}"; do
-        if [ -f "$file" ]; then
-            git update-index --skip-worktree "$file"
-            echo "🙈 Skipping: $file"
-            ((count++))
+        # Ensure the path is tracked in the git index rather than just existing on disk
+        if git ls-files --error-unmatch -- "$file" >/dev/null 2>&1; then
+            if git update-index --skip-worktree -- "$file"; then
+                echo "🙈 Skipping: $file"
+                ((count++))
+            else
+                echo "⚠️  Failed to mark as skip-worktree (git update-index error): $file"
+            fi
         else
-            echo "⚠️  File not found: $file"
+            if [ -e "$file" ]; then
+                echo "⚠️  Path is not tracked by git (cannot set skip-worktree): $file"
+            else
+                echo "⚠️  Path not found in working tree or git index: $file"
+            fi
         fi
     done
 
