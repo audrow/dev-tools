@@ -95,6 +95,9 @@ _wta_setup_worktree() {
   local main_repo_path="$1"
   local target_dir="$2"
 
+  # Enable nullglob to handle case where no .env* files exist
+  shopt -s nullglob
+  
   # Copy all .env* files (.env, .env.local, .env.development, etc.)
   local env_files_copied=0
   for env_file in "$main_repo_path"/.env*; do
@@ -103,20 +106,40 @@ _wta_setup_worktree() {
       env_files_copied=$((env_files_copied + 1))
     fi
   done
+  
+  # Disable nullglob after use
+  shopt -u nullglob
+  
   if [ $env_files_copied -gt 0 ]; then
     echo "📋 Copied $env_files_copied .env* file(s)"
   fi
 
   # Symlink node_modules if it exists (faster than copying)
   if [ -d "$main_repo_path/node_modules" ]; then
-    ln -s "$main_repo_path/node_modules" "$target_dir/node_modules"
-    echo "🔗 Symlinked node_modules"
+    if [ -e "$target_dir/node_modules" ] || [ -L "$target_dir/node_modules" ]; then
+      if [ -L "$target_dir/node_modules" ] && [ "$(readlink "$target_dir/node_modules")" = "$main_repo_path/node_modules" ]; then
+        echo "🔗 node_modules already symlinked; skipping"
+      else
+        echo "⚠️  node_modules already exists in $target_dir; skipping symlink"
+      fi
+    else
+      ln -s "$main_repo_path/node_modules" "$target_dir/node_modules"
+      echo "🔗 Symlinked node_modules"
+    fi
   fi
 
   # Symlink Python .venv if it exists
   if [ -d "$main_repo_path/.venv" ]; then
-    ln -s "$main_repo_path/.venv" "$target_dir/.venv"
-    echo "🐍 Symlinked .venv"
+    if [ -e "$target_dir/.venv" ] || [ -L "$target_dir/.venv" ]; then
+      if [ -L "$target_dir/.venv" ] && [ "$(readlink "$target_dir/.venv")" = "$main_repo_path/.venv" ]; then
+        echo "🐍 .venv already symlinked; skipping"
+      else
+        echo "⚠️  .venv already exists in $target_dir; skipping symlink"
+      fi
+    else
+      ln -s "$main_repo_path/.venv" "$target_dir/.venv"
+      echo "🐍 Symlinked .venv"
+    fi
   fi
 
   # Ask to copy worktree path to clipboard
@@ -126,19 +149,43 @@ _wta_setup_worktree() {
     fi
   fi
 
-  # Run post-setup hook if it exists
+  # Run post-setup hook if it exists (with security confirmation)
+  local worktree_setup_script=""
+  local worktree_setup_source=""
+  
   if [ -f "$target_dir/.worktree-setup.sh" ]; then
-    echo "🔧 Running .worktree-setup.sh..."
-    (cd "$target_dir" && bash .worktree-setup.sh)
+    worktree_setup_script="$target_dir/.worktree-setup.sh"
+    worktree_setup_source="worktree"
   elif [ -f "$main_repo_path/.worktree-setup.sh" ]; then
-    echo "🔧 Running .worktree-setup.sh from main repo..."
-    (cd "$target_dir" && bash "$main_repo_path/.worktree-setup.sh")
+    worktree_setup_script="$main_repo_path/.worktree-setup.sh"
+    worktree_setup_source="main repo"
+  fi
+  
+  if [ -n "$worktree_setup_script" ]; then
+    echo ""
+    echo "⚠️  A .worktree-setup.sh script was found in the $worktree_setup_source:"
+    echo "   $worktree_setup_script"
+    if _prompt_yn "Execute this script now?" "N"; then
+      echo "🔧 Running .worktree-setup.sh..."
+      (cd "$target_dir" && bash "$worktree_setup_script")
+      local hook_status=$?
+      if [ $hook_status -ne 0 ]; then
+        echo "⚠️  Warning: .worktree-setup.sh exited with status $hook_status"
+      fi
+    else
+      echo "ℹ️  Skipped .worktree-setup.sh execution."
+    fi
   fi
 
   # Open editor if USER_IDE is set
   if [ -n "$USER_IDE" ]; then
     if _prompt_yn "🚀 Open in $USER_IDE?" "Y"; then
-      "$USER_IDE" "$target_dir"
+      if ! command -v "$USER_IDE" >/dev/null 2>&1; then
+        echo "❌ Error: USER_IDE command '$USER_IDE' not found."
+        echo "   Please ensure it is installed and in your PATH."
+      elif ! "$USER_IDE" "$target_dir" 2>/dev/null; then
+        echo "⚠️  Warning: Failed to open IDE using '$USER_IDE'."
+      fi
     fi
   fi
 }

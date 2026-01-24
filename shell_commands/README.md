@@ -86,9 +86,10 @@ wta <description|branch-name> [--base|-b base-branch]
 - **Existing branch handling**: If branch exists, prompts to checkout existing or force recreate
 - **Copies all `.env*` files**: Copies `.env`, `.env.local`, `.env.development`, etc.
 - **Symlinks `node_modules`**: If `node_modules` exists, it's symlinked (faster than copying)
+  - ⚠️ **Note**: Symlinks use absolute paths. If you move the main repository or sync via cloud storage, symlinks will break
 - **Symlinks `.venv`**: Python virtual environments are symlinked too
 - **Optional clipboard copy**: Prompts if you want to copy the worktree path to clipboard (defaults to no)
-- **Runs post-setup hook**: Executes `.worktree-setup.sh` if it exists (for project-specific setup)
+- **Runs post-setup hook**: Executes `.worktree-setup.sh` if it exists, **with security confirmation** (defaults to no)
 - **Opens your IDE** (with confirmation): If `USER_IDE` is set, prompts to open the worktree in your editor (defaults to yes)
 - **Stays in place**: Does not change your current directory
 
@@ -105,6 +106,8 @@ Create a `.worktree-setup.sh` in your repo root for project-specific setup:
 npm install        # or: pip install -e .
 cp .env.example .env.local
 ```
+
+**Security Note**: For safety, `wta` will always prompt before executing `.worktree-setup.sh` scripts (defaults to **No**). This prevents untrusted code from running automatically when creating worktrees from branches you haven't reviewed.
 
 **Examples:**
 ```bash

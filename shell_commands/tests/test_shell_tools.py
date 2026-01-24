@@ -234,9 +234,10 @@ class TestShellTools(unittest.TestCase):
         subprocess.check_call(["git", "add", ".worktree-setup.sh"], cwd=self.test_dir)
         subprocess.check_call(["git", "commit", "-m", "Add hook"], cwd=self.test_dir)
 
-        res = self.run_bash("wta hook-test", input_text="n\n")
+        # Input: n for clipboard, y for running hook
+        res = self.run_bash("wta hook-test", input_text="n\ny\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
-        self.assertIn("Running .worktree-setup.sh", res.stdout)
+        self.assertIn("Execute this script now?", res.stderr)  # Prompt goes to stderr
 
         # Verify the hook ran (created marker file)
         worktree_dir = (
