@@ -6,11 +6,12 @@ set -e
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SHELL_RC=""
 
-# Detect Shell
-if [ -n "$BASH_VERSION" ]; then
-    SHELL_RC="$HOME/.bashrc"
-elif [ -n "$ZSH_VERSION" ]; then
+# Detect Shell by checking $SHELL environment variable
+CURRENT_SHELL=$(basename "$SHELL")
+if [[ "$CURRENT_SHELL" == "zsh" ]]; then
     SHELL_RC="$HOME/.zshrc"
+elif [[ "$CURRENT_SHELL" == "bash" ]]; then
+    SHELL_RC="$HOME/.bashrc"
 fi
 
 echo "🔧 Setting up Dev Tools in $REPO_ROOT..."
