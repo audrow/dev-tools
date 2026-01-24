@@ -75,9 +75,9 @@ gdiff_out() {
     echo "💾 Diff saved to $outfile"
 }
 
-# GDMB: Diff from merge-base with origin/main and save to ~/Downloads/git-<branch>.diff
-# Usage: gdmb [base_branch]
-gdmb() {
+# GDMBO: Diff from merge-base with origin/main and save to ~/Downloads/git-<branch>.diff
+# Usage: gdmbo [base_branch]
+gdmbo() {
     local base=$(gmb "$1")
     if [ -n "$base" ]; then
         gdiff_out "$base"

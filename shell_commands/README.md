@@ -41,10 +41,21 @@ Commonly used git commands shortened for speed.
 
 | Command | Git Equivalent | Description |
 | :--- | :--- | :--- |
-| `glog` | `git log --oneline --graph --decorate` | Visual, compact git log. |
+| `gl` | `git log --oneline --graph --decorate` | Visual, compact git log (one-liners). |
+| `glog` | `git log` | Show commit logs (full). |
 | `gst` | `git status` | Show the working tree status. |
+| `gs` | `git status` | Short alias for git status. |
+| `gb` | `git branch` | List, create, or delete branches. |
+| `gbd` | `git branch -d` | Delete a branch. |
 | `gco` | `git checkout` | Checkout a branch or paths. |
-| `gl` | `git pull` | Fetch from and integrate with another repository. |
+| `gca` | `git commit -a` | Commit all tracked changes. |
+| `gcm` | `git commit -m` | Commit with a message. |
+| `gd` | `git diff` | Show changes between commits, commit and working tree, etc. |
+| `gds` | `git diff --stat` | Show diff statistics. |
+| `gdstaged` | `git diff --staged` | Show changes that are staged. |
+| `gdmb` | diff merge-base | Show diff from merge-base with origin/main (or master). |
+| `gdmbs` | diff merge-base --stat | Show diff statistics from merge-base. |
+| `gpl` | `git pull` | Fetch from and integrate with another repository. |
 | `gp` | `git push` | Update remote refs along with associated objects. |
 
 ### Git Worktree Tools (`git_worktree_tools.sh`)
@@ -53,11 +64,113 @@ Helpers for managing `git worktree` workflows. Uses `fzf` for fuzzy searching.
 
 | Command | Usage | Description |
 | :--- | :--- | :--- |
-| `wt` | `wt` | Fuzzy search and switch between existing worktrees. |
-| `wta` | `wta <branch> [base]` | Create a new worktree for `<branch>` based on `[base]` (defaults to `main`). |
-| `wtp` | `wtp` | Prune the current worktree (removes the directory and the worktree entry) and returns to the main repository. |
+| `wt` | `wt` | **Switch to worktree**: Fuzzy search and switch to a worktree. Shows helpful message if only main worktree exists. |
+| `wta` | `wta <desc> [--base branch]` | **Add worktree**: Create a new worktree. See details below. |
+| `wtp` | `wtp` | **Prune worktree**: Select a worktree with fzf, delete it, and optionally delete the branch (with confirmation). |
+| `wto` | `wto` | **Open worktree**: Select a worktree with fzf and open it in your IDE (`$USER_IDE`). |
 
-*Note: `wt` requires [fzf](https://github.com/junegunn/fzf) to be installed.*
+*Note: All worktree commands require [fzf](https://github.com/junegunn/fzf) to be installed.*
+
+#### `wta` - Add Worktree
+
+Creates a new worktree with smart defaults and convenience features.
+
+**Usage:**
+```bash
+wta <description|branch-name> [--base|-b base-branch]
+```
+
+**Features:**
+- **Auto-fetch**: Fetches latest from all remotes before creating
+- **Smart branch naming**: Converts descriptions to slugs and prefixes with `$GITHUB_USER/`
+- **Existing branch handling**: If branch exists, prompts to checkout existing or force recreate
+- **Copies all `.env*` files**: Copies `.env`, `.env.local`, `.env.development`, etc.
+- **Symlinks `node_modules`**: If `node_modules` exists, it's symlinked (faster than copying)
+  - ⚠️ **Note**: Symlinks use absolute paths. If you move the main repository or sync via cloud storage, symlinks will break
+- **Symlinks `.venv`**: Python virtual environments are symlinked too
+- **Optional clipboard copy**: Prompts if you want to copy the worktree path to clipboard (defaults to no)
+- **Runs post-setup hook**: Executes `.worktree-setup.sh` if it exists, **with security confirmation** (defaults to no)
+- **Opens your IDE** (with confirmation): If `USER_IDE` is set, prompts to open the worktree in your editor (defaults to yes)
+- **Stays in place**: Does not change your current directory
+
+**Environment Variables:**
+- `GITHUB_USER` (required): Your GitHub username for branch prefixing
+- `USER_IDE` (optional): Command to open your IDE (e.g., `code`, `cursor`, `webstorm`)
+
+**Post-Setup Hook:**
+
+Create a `.worktree-setup.sh` in your repo root for project-specific setup:
+```bash
+#!/bin/bash
+# .worktree-setup.sh - runs after worktree creation
+npm install        # or: pip install -e .
+cp .env.example .env.local
+```
+
+**Security Note**: For safety, `wta` will always prompt before executing `.worktree-setup.sh` scripts (defaults to **No**). This prevents untrusted code from running automatically when creating worktrees from branches you haven't reviewed.
+
+**Examples:**
+```bash
+# Create worktree for "add login feature" -> branch: youruser/add-login-feature
+wta "add login feature"
+
+# Create worktree based on a different branch
+wta "hotfix" --base release/v2
+
+# If branch exists, you'll be prompted:
+# ⚠️  Branch 'youruser/existing' already exists.
+# Force recreate? This will delete the existing branch. [y/N]
+# - Enter 'n' to checkout the existing branch
+# - Enter 'y' to delete and recreate it fresh
+
+# If USER_IDE=code, you'll be prompted:
+# 🚀 Open in code? [Y/n]
+```
+
+#### `wtp` - Prune Worktree
+
+Select and delete a worktree using fzf.
+
+**Features:**
+- **Fuzzy search**: Use fzf to select which worktree to delete
+- **Confirmation prompt**: Shows branch name and path before deleting
+- **Branch deletion**: After removing worktree, prompts to delete the branch (defaults to yes)
+  - First tries `git branch -d` (safe delete)
+  - If branch is not fully merged, asks if you want to force delete with `-D`
+- **Safe navigation**: If you're in the worktree being deleted, automatically moves you to the main repo
+
+**Example:**
+```bash
+$ wtp
+🗑️  Select worktree to delete...
+[fzf interface shows list of worktrees]
+
+⚠️  About to delete worktree:
+   Path: /Users/you/.worktrees/repo/my-feature
+   Branch: youruser/my-feature
+
+Are you sure? [y/N] y
+Removing worktree: /Users/you/.worktrees/repo/my-feature
+✅ Worktree removed.
+
+🗑️  Delete branch 'youruser/my-feature'? [Y/n] y
+✅ Branch deleted.
+```
+
+#### `wto` - Open Worktree in IDE
+
+Select a worktree and open it in your configured IDE.
+
+**Requirements:**
+- `USER_IDE` environment variable must be set (e.g., `export USER_IDE=code`)
+
+**Example:**
+```bash
+$ wto
+💻 Select worktree to open in code...
+[fzf interface shows list of worktrees]
+🚀 Opening /Users/you/.worktrees/repo/my-feature in code...
+```
 
 ### Git Workflow Tools (`git_workflow_tools.sh`)
 
@@ -68,7 +181,7 @@ Advanced workflow automation.
 | `gupdate` | `gupdate [base]` | Updates your branch: **Fetch** -> **Merge** `origin/[base]` into current branch. |
 | `gmb` | `gmb [base]` | Finds the merge-base between `origin/[base]` and `HEAD`. Automatically falls back to `master` if `main` is missing. |
 | `gdiff_out` | `gdiff_out [args]` | Runs `git diff [args]` and saves the output to `~/Downloads/git-<branch>.diff`. Useful for copying diffs over SSH. |
-| `gdmb` | `gdmb [base]` | Combines `gmb` and `gdiff_out`. Diffs from the merge-base of `origin/[base]` and saves to `~/Downloads/git-<branch>.diff`. |
+| `gdmbo` | `gdmbo [base]` | Combines `gmb` and `gdiff_out`. Diffs from the merge-base of `origin/[base]` and saves to `~/Downloads/git-<branch>.diff`. |
 
 ### Python Tools Aliases (`python_tools.sh`)
 
@@ -82,10 +195,21 @@ Convenient wrappers for the Python tools in this repository. These allow you to 
 
 ## How it Works
 
-- `init.sh`: The entry point. It detects its own location and sources the other `.sh` files in the directory.
+- `init.sh`: The entry point. It detects its own location and sources the other `.sh` files in the directory. Handles zsh compatibility by wrapping bash-specific functions.
+- `utils.sh`: Shared utility functions (clipboard, worktree helpers).
 - `git_aliases.sh`: Basic function-based aliases.
 - `git_worktree_tools.sh`: Logic for worktree management, including path sanitization and tracking fixes.
 - `git_workflow_tools.sh`: Multi-step git procedures.
+
+### Utility Functions (`utils.sh`)
+
+Shared helpers available to all scripts:
+
+| Function | Usage | Description |
+| :--- | :--- | :--- |
+| `copy_to_clipboard` | `copy_to_clipboard "text"` | Copies text to clipboard (macOS/Linux). Returns 0 on success. |
+| `get_main_worktree_path` | `path=$(get_main_worktree_path)` | Returns the path to the main (first) worktree. |
+| `command_exists` | `if command_exists fzf; then` | Check if a command is available. |
 
 ## Customization
 
