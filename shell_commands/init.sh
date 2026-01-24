@@ -116,7 +116,7 @@ else
     gupdate() { _run_bash_func gupdate "$@"; }
     gmb() { _run_bash_func gmb "$@"; }
     gdiff_out() { _run_bash_func gdiff_out "$@"; }
-    gdmb() { _run_bash_func gdmb "$@"; }
+    gdmbo() { _run_bash_func gdmbo "$@"; }
     
     # Source git_aliases.sh directly - it only defines simple aliases that work in zsh
     [ -f "$SCRIPT_DIR/git_aliases.sh" ] && source "$SCRIPT_DIR/git_aliases.sh"

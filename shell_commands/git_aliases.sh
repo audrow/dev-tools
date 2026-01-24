@@ -3,7 +3,7 @@
 # Git log (simple)
 # Usage: glog [options]
 function glog() {
-    git log
+    git log "$@"
 }
 
 # Git status
@@ -43,7 +43,7 @@ function gca() {
 
 # Git commit with message
 function gcm() {
-    git commit -m "$@"
+    git commit -m "$*"
 }
 
 # Git diff

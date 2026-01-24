@@ -422,7 +422,7 @@ class TestShellTools(unittest.TestCase):
         subprocess.check_call(["git", "branch", "testuser/foo"], cwd=self.test_dir)
 
         # wta "foo" should checkout "testuser/foo" (answer 'n' to force recreate, 'n' to clipboard)
-        res = self.run_bash('wta "foo"', input_text="n\nn\n")
+        res = self.run_bash('wta "foo"', input_text="n\nn")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Checked out existing branch: testuser/foo", res.stdout)
 
@@ -495,7 +495,7 @@ class TestShellTools(unittest.TestCase):
         subprocess.check_call(["git", "checkout", "main"], cwd=self.test_dir)
 
         # Run wta with 'n' to not force recreate, 'n' for clipboard
-        res = self.run_bash("wta existing", input_text="n\nn\n")
+        res = self.run_bash("wta existing", input_text="n\nn")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("already exists", res.stdout)
         self.assertIn("Checked out existing branch", res.stdout)
@@ -523,8 +523,8 @@ class TestShellTools(unittest.TestCase):
         subprocess.check_call(["git", "commit", "-m", "Old commit"], cwd=self.test_dir)
         subprocess.check_call(["git", "checkout", "main"], cwd=self.test_dir)
 
-        # Run wta with 'y' to force recreate, then 'n' for clipboard, 'n' for IDE
-        res = self.run_bash('wta "recreate test"', input_text="y\nn\nn\n")
+        # Run wta with 'y' to force recreate, then 'n' for clipboard
+        res = self.run_bash('wta "recreate test"', input_text="y\nn")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("already exists", res.stdout)
         # "Force recreate?" prompt goes to stderr
@@ -550,31 +550,6 @@ class TestShellTools(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f"wt failed: {res.stderr}")
         self.assertIn("No additional worktrees found", res.stdout)
         self.assertIn("Use 'wta", res.stdout)
-
-    def test_wtp_deletes_branch_by_default(self):
-        """Test that wtp asks to delete branch and deletes it with -d by default."""
-        self.setup_repo()
-
-        # Create a worktree
-        res = self.run_bash("wta test-branch", input_text="n\n")
-        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
-
-        # Verify branch exists
-        res_branch = subprocess.run(
-            ["git", "branch"], cwd=self.test_dir, capture_output=True, text=True
-        )
-        self.assertIn("testuser/test-branch", res_branch.stdout)
-
-        # Delete the worktree and the branch (y to confirm worktree, y to delete branch)
-        # Use echo to simulate selecting the first (and only) non-main worktree
-        # We can't easily test fzf interaction, so we'll skip this complex test
-        # and just verify the logic works in manual testing
-
-    def test_wtp_force_delete_unmerged_branch(self):
-        """Test that wtp offers force delete when branch is not fully merged."""
-        # This is also difficult to test without mocking fzf
-        # Manual testing is recommended for this feature
-        pass
 
 
 class TestZshCompatibility(unittest.TestCase):
