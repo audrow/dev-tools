@@ -65,7 +65,7 @@ else
         # Use a temp file to capture the __BASH_CD__ marker
         local temp_file=$(mktemp)
         
-        bash -c "
+        bash -i -c "
             source '$SCRIPT_DIR/utils.sh' 2>/dev/null
             source '$SCRIPT_DIR/git_aliases.sh' 2>/dev/null
             source '$SCRIPT_DIR/git_worktree_tools.sh' 2>/dev/null
@@ -88,7 +88,7 @@ else
             exit_code=\$?
             exec 3>&-
             exit \$exit_code
-        " -- "$@"
+        " -- "$@" </dev/tty
         local ret=$?
         
         # Extract cd path if present
