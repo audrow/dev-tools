@@ -6,7 +6,12 @@ __pycache__/
 # Virtual Environments
 venv/
 .venv/
+.venv
 *_venv/
+
+# Node modules
+node_modules/
+node_modules
 
 # IDE / Editor
 .vscode/

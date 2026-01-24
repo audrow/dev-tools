@@ -68,6 +68,8 @@ Helpers for managing `git worktree` workflows. Uses `fzf` for fuzzy searching.
 | `wta` | `wta <desc> [--base branch]` | **Add worktree**: Create a new worktree. See details below. |
 | `wtp` | `wtp` | **Prune worktree**: Select a worktree with fzf, delete it, and optionally delete the branch (with confirmation). |
 | `wto` | `wto` | **Open worktree**: Select a worktree with fzf and open it in your IDE (`$USER_IDE`). |
+| `wtlock` | `wtlock` | **Lock root worktree**: Install pre-commit hook to prevent commits in the root worktree. |
+| `wtunlock` | `wtunlock` | **Unlock root worktree**: Remove the lock hook to allow commits again. |
 
 *Note: All worktree commands require [fzf](https://github.com/junegunn/fzf) to be installed.*
 
@@ -160,6 +162,64 @@ Removing worktree: /Users/you/.worktrees/repo/my-feature
 #### `wto` - Open Worktree in IDE
 
 Select a worktree and open it in your configured IDE.
+
+**Requirements:**
+- Requires `$USER_IDE` environment variable (e.g., `export USER_IDE=code`)
+
+#### `wtlock` / `wtunlock` - Lock Root Worktree
+
+Prevent accidental commits in the root/primary worktree.
+
+**Usage:**
+```bash
+# Lock the root worktree (prevents commits)
+wtlock
+
+# Unlock to allow commits again
+wtunlock
+```
+
+**Features:**
+- **Installs pre-commit hook**: Creates a `.git/hooks/pre-commit` that blocks commits
+- **Works in any worktree**: Only blocks commits in the root worktree, not in named worktrees
+- **Safe overwrite check**: If a pre-commit hook already exists, prompts before overwriting
+- **Clear error messages**: Shows helpful message when commit is blocked, suggesting to use `wta`
+
+**Example workflow:**
+```bash
+# Lock the root worktree to enforce named worktrees
+$ wtlock
+🔒 Root worktree locked! Commits are now blocked.
+   Hook installed: /path/to/repo/.git/hooks/pre-commit
+   To unlock: wtunlock
+
+# Try to commit in root (will be blocked)
+$ git commit -m "test"
+
+❌ ERROR: Commits are blocked in the root worktree!
+
+   This repository uses named worktrees for development.
+   Please create a worktree with: wta <branch-name>
+
+   Current location: /path/to/repo
+   Root worktree: /path/to/repo
+
+   To unlock: wtunlock
+
+# Commits in named worktrees still work
+$ wta feature
+$ git commit -m "works!"  # ✅ Success
+
+# Unlock when needed
+$ wtunlock
+🔓 Root worktree unlocked! Commits are now allowed.
+```
+
+**Why use this?**
+- Enforces clean git history by keeping all work in named branches
+- Prevents accidental commits to main/master
+- Keeps the root directory clean for reference
+- Makes it obvious which branch you're working on (by the worktree path)
 
 **Requirements:**
 - `USER_IDE` environment variable must be set (e.g., `export USER_IDE=code`)
