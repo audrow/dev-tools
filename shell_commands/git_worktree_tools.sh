@@ -1,22 +1,84 @@
 #!/bin/bash
 
-# WT: Switch to Worktree (using fzf)
-# Usage: wt
-wt() {
-  local selected_worktree
-  
+# Helper: Check if fzf is installed
+_require_fzf() {
   if ! command_exists fzf; then
     echo "❌ Error: fzf is not installed. Please install fzf to use this command."
     return 1
   fi
+  return 0
+}
 
+# Helper: Check if USER_IDE is set
+_require_user_ide() {
+  if [ -z "$USER_IDE" ]; then
+    echo "❌ Error: USER_IDE environment variable is not set."
+    echo "Please set it in your shell configuration (e.g., export USER_IDE=code)."
+    return 1
+  fi
+  return 0
+}
+
+# Helper: Prompt for yes/no with default
+# Usage: _prompt_yn "Question?" "Y" (for default yes) or "N" (for default no)
+# Returns 0 for yes, 1 for no
+_prompt_yn() {
+  local question="$1"
+  local default="${2:-N}"  # Default to N if not specified
+  local prompt_suffix
+  
+  if [[ "$default" =~ ^[Yy]$ ]]; then
+    prompt_suffix="[Y/n]"
+  else
+    prompt_suffix="[y/N]"
+  fi
+  
+  # Print prompt to stderr to avoid polluting stdout
+  echo -n "$question $prompt_suffix " >&2
+  read response
+  
+  # If empty, use default
+  if [ -z "$response" ]; then
+    response="$default"
+  fi
+  
+  if [[ "$response" =~ ^[Yy]$ ]]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+# Helper: Select a worktree using fzf
+# Usage: _select_worktree "header text" [skip_first_line]
+# Returns the selected worktree path (first column), empty if cancelled
+_select_worktree() {
+  local header="${1:-Select worktree}"
+  local skip_first="${2:-false}"
+  local worktree_list
+  
+  if [ "$skip_first" = "true" ]; then
+    worktree_list=$(git worktree list | tail -n +2)
+  else
+    worktree_list=$(git worktree list)
+  fi
+  
+  echo "$worktree_list" | fzf --height 40% --layout=reverse --header="$header" | awk '{print $1}'
+}
+
+# WT: Switch to Worktree (using fzf)
+# Usage: wt
+wt() {
+  _require_fzf || return 1
+  
   echo "📂 Select worktree to switch to..."
-  # Lists worktrees, uses fzf, and grabs the path (first column)
-  selected_worktree=$(git worktree list | fzf --height 40% --layout=reverse --header="Select worktree" | awk '{print $1}')
+  local selected_worktree=$(_select_worktree "Select worktree")
 
   if [ -n "$selected_worktree" ]; then
     echo "__BASH_CD__:$selected_worktree"
     cd "$selected_worktree"
+  else
+    echo "❌ Cancelled."
   fi
 }
 
@@ -49,9 +111,11 @@ _wta_setup_worktree() {
     echo "🐍 Symlinked .venv"
   fi
 
-  # Copy worktree path to clipboard
-  if copy_to_clipboard "$target_dir"; then
-    echo "📎 Copied path to clipboard"
+  # Ask to copy worktree path to clipboard
+  if _prompt_yn "📎 Copy path to clipboard?" "N"; then
+    if copy_to_clipboard "$target_dir"; then
+      echo "📎 Copied to clipboard"
+    fi
   fi
 
   # Run post-setup hook if it exists
@@ -65,10 +129,7 @@ _wta_setup_worktree() {
 
   # Open editor if USER_IDE is set
   if [ -n "$USER_IDE" ]; then
-    echo -n "🚀 Open in $USER_IDE? [Y/n] "
-    read open_ide
-    # Default to yes if empty or starts with Y/y
-    if [[ -z "$open_ide" || "$open_ide" =~ ^[Yy] ]]; then
+    if _prompt_yn "🚀 Open in $USER_IDE?" "Y"; then
       "$USER_IDE" "$target_dir"
     fi
   fi
@@ -159,10 +220,8 @@ wta() {
 
   if [ -n "$existing_branch" ]; then
     echo "⚠️  Branch '$existing_branch' already exists."
-    echo -n "Force recreate? This will delete the existing branch. [y/N] "
-    read force_recreate
     
-    if [[ "$force_recreate" =~ ^[Yy]$ ]]; then
+    if _prompt_yn "Force recreate? This will delete the existing branch." "N"; then
       echo "🗑️  Deleting existing branch '$existing_branch'..."
       # Remove worktree if it exists for this branch
       local existing_worktree=$(git worktree list | grep "$existing_branch" | awk '{print $1}')
@@ -232,19 +291,16 @@ wta() {
 # WTP: Prune Worktree (select with fzf, then delete)
 # Usage: wtp
 wtp() {
+  _require_fzf || return 1
+  
   local main_repo_path=$(get_main_worktree_path)
   
-  if ! command_exists fzf; then
-    echo "❌ Error: fzf is not installed. Please install fzf to use this command."
-    return 1
-  fi
-
   echo "🗑️  Select worktree to delete..."
   # Get worktree list excluding the main worktree
   local selected_line=$(git worktree list | tail -n +2 | fzf --height 40% --layout=reverse --header="Select worktree to delete")
   
   if [ -z "$selected_line" ]; then
-    echo "Cancelled."
+    echo "❌ Cancelled."
     return 0
   fi
   
@@ -257,9 +313,8 @@ wtp() {
   echo "   Path: $worktree_path"
   echo "   Branch: $branch_name"
   echo ""
-  echo -n "Are you sure? [y/N] "
-  read confirm
-  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+  
+  if ! _prompt_yn "Are you sure?" "N"; then
     echo "Cancelled."
     return 0
   fi
@@ -281,24 +336,16 @@ wtp() {
 # WTO: Open Worktree in IDE (select with fzf)
 # Usage: wto
 wto() {
-  if [ -z "$USER_IDE" ]; then
-    echo "❌ Error: USER_IDE environment variable is not set."
-    echo "Please set it in your shell configuration (e.g., export USER_IDE=code)."
-    return 1
-  fi
-  
-  if ! command_exists fzf; then
-    echo "❌ Error: fzf is not installed. Please install fzf to use this command."
-    return 1
-  fi
+  _require_user_ide || return 1
+  _require_fzf || return 1
 
   echo "💻 Select worktree to open in $USER_IDE..."
-  local selected_worktree=$(git worktree list | fzf --height 40% --layout=reverse --header="Select worktree to open" | awk '{print $1}')
+  local selected_worktree=$(_select_worktree "Select worktree to open")
 
   if [ -n "$selected_worktree" ]; then
     echo "🚀 Opening $selected_worktree in $USER_IDE..."
     "$USER_IDE" "$selected_worktree"
   else
-    echo "Cancelled."
+    echo "❌ Cancelled."
   fi
 }

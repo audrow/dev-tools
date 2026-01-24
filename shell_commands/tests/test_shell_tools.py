@@ -41,14 +41,18 @@ class TestShellTools(unittest.TestCase):
 
         shutil.rmtree(self.test_dir)
 
-    def run_bash(self, command, cwd=None):
+    def run_bash(self, command, cwd=None, input_text=None):
         """Runs a bash command with the tools sourced."""
         if cwd is None:
             cwd = self.test_dir
 
         full_command = f"source {INIT_SCRIPT} && {command}"
         result = subprocess.run(
-            ["bash", "-c", full_command], cwd=cwd, capture_output=True, text=True
+            ["bash", "-c", full_command],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            input=input_text,
         )
         return result
 
@@ -105,7 +109,7 @@ class TestShellTools(unittest.TestCase):
         # wta uses $HOME to determine where to put worktrees (~/.worktrees).
         # We have mocked HOME to be self.test_dir in setUp.
 
-        res = self.run_bash("wta new-feature")
+        res = self.run_bash("wta new-feature", input_text="n\n")  # n for clipboard
 
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Created new branch", res.stdout)
@@ -129,7 +133,7 @@ class TestShellTools(unittest.TestCase):
         env_content = "SECRET_KEY=test123\nDATABASE_URL=postgres://localhost"
         (Path(self.test_dir) / ".env").write_text(env_content)
 
-        res = self.run_bash("wta env-test")
+        res = self.run_bash("wta env-test", input_text="n\n")  # n for clipboard
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Copied 1 .env* file(s)", res.stdout)
 
@@ -154,7 +158,7 @@ class TestShellTools(unittest.TestCase):
         (node_modules / "some-package").mkdir()
         (node_modules / "some-package" / "index.js").write_text("module.exports = {}")
 
-        res = self.run_bash("wta node-test")
+        res = self.run_bash("wta node-test", input_text="n\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Symlinked node_modules", res.stdout)
 
@@ -180,7 +184,7 @@ class TestShellTools(unittest.TestCase):
         (Path(self.test_dir) / ".env.local").write_text("LOCAL=value")
         (Path(self.test_dir) / ".env.development").write_text("DEV=value")
 
-        res = self.run_bash("wta multi-env-test")
+        res = self.run_bash("wta multi-env-test", input_text="n\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Copied 3 .env* file(s)", res.stdout)
 
@@ -205,7 +209,7 @@ class TestShellTools(unittest.TestCase):
         (venv / "bin").mkdir()
         (venv / "bin" / "python").write_text("#!/bin/bash\necho python")
 
-        res = self.run_bash("wta venv-test")
+        res = self.run_bash("wta venv-test", input_text="n\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Symlinked .venv", res.stdout)
 
@@ -230,7 +234,7 @@ class TestShellTools(unittest.TestCase):
         subprocess.check_call(["git", "add", ".worktree-setup.sh"], cwd=self.test_dir)
         subprocess.check_call(["git", "commit", "-m", "Add hook"], cwd=self.test_dir)
 
-        res = self.run_bash("wta hook-test")
+        res = self.run_bash("wta hook-test", input_text="n\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Running .worktree-setup.sh", res.stdout)
 
@@ -249,7 +253,7 @@ class TestShellTools(unittest.TestCase):
         self.setup_repo()
 
         # Run wta and then pwd to verify we're still in the original directory
-        res = self.run_bash("wta stay-test && pwd")
+        res = self.run_bash("wta stay-test && pwd", input_text="n\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
 
         # pwd should output the test_dir, not the worktree
@@ -367,7 +371,7 @@ class TestShellTools(unittest.TestCase):
         expected_branch = "testuser/icon-session-opened-when-jogging-in-initial-world"
 
         # Note: We need to pass the description in quotes in the bash command
-        res = self.run_bash(f'wta "{description}"')
+        res = self.run_bash(f'wta "{description}"', input_text="n\n")
 
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
@@ -399,7 +403,9 @@ class TestShellTools(unittest.TestCase):
         expected_branch = "testuser/fixing-bug"
 
         # wta "fixing bug" --base base-feature
-        res = self.run_bash(f'wta "{description}" --base base-feature')
+        res = self.run_bash(
+            f'wta "{description}" --base base-feature', input_text="n\n"
+        )
 
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
@@ -414,8 +420,8 @@ class TestShellTools(unittest.TestCase):
         # Create branch testuser/foo
         subprocess.check_call(["git", "branch", "testuser/foo"], cwd=self.test_dir)
 
-        # wta "foo" should checkout "testuser/foo" (answer 'n' to force recreate)
-        res = self.run_bash('echo "n" | wta "foo"')
+        # wta "foo" should checkout "testuser/foo" (answer 'n' to force recreate, 'n' to clipboard)
+        res = self.run_bash('wta "foo"', input_text="n\nn\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Checked out existing branch: testuser/foo", res.stdout)
 
@@ -424,7 +430,7 @@ class TestShellTools(unittest.TestCase):
         # wta foo bar -> foo-bar (bar is not a branch)
         expected_branch = "testuser/foo-bar"
 
-        res = self.run_bash("wta foo bar")
+        res = self.run_bash("wta foo bar", input_text="n\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
 
@@ -441,7 +447,7 @@ class TestShellTools(unittest.TestCase):
         # wta fixing bug --base feature -> fixing-bug (based on feature)
         expected_branch = "testuser/fixing-bug"
 
-        res = self.run_bash("wta fixing bug --base feature")
+        res = self.run_bash("wta fixing bug --base feature", input_text="n\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
 
@@ -458,7 +464,7 @@ class TestShellTools(unittest.TestCase):
         # wta fixing bug feature -> fixing-bug-feature (since no --base flag)
         expected_branch = "testuser/fixing-bug-feature"
 
-        res = self.run_bash("wta fixing bug feature")
+        res = self.run_bash("wta fixing bug feature", input_text="n\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn(f"Created new branch: {expected_branch}", res.stdout)
 
@@ -487,8 +493,8 @@ class TestShellTools(unittest.TestCase):
         subprocess.check_call(["git", "commit", "-m", "Initial"], cwd=self.test_dir)
         subprocess.check_call(["git", "checkout", "main"], cwd=self.test_dir)
 
-        # Run wta with 'n' to not force recreate
-        res = self.run_bash('echo "n" | wta existing')
+        # Run wta with 'n' to not force recreate, 'n' for clipboard
+        res = self.run_bash("wta existing", input_text="n\nn\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("already exists", res.stdout)
         self.assertIn("Checked out existing branch", res.stdout)
@@ -516,11 +522,12 @@ class TestShellTools(unittest.TestCase):
         subprocess.check_call(["git", "commit", "-m", "Old commit"], cwd=self.test_dir)
         subprocess.check_call(["git", "checkout", "main"], cwd=self.test_dir)
 
-        # Run wta with 'y' to force recreate, then 'n' to skip opening IDE
-        res = self.run_bash('echo -e "y\\nn" | wta "recreate test"')
+        # Run wta with 'y' to force recreate, then 'n' for clipboard, 'n' for IDE
+        res = self.run_bash('wta "recreate test"', input_text="y\nn\nn\n")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("already exists", res.stdout)
-        self.assertIn("Force recreate", res.stdout)
+        # "Force recreate?" prompt goes to stderr
+        self.assertIn("Force recreate", res.stderr)
         self.assertIn("Deleting existing branch", res.stdout)
         self.assertIn("Created new branch", res.stdout)
 
@@ -575,14 +582,18 @@ class TestZshCompatibility(unittest.TestCase):
 
         shutil.rmtree(self.test_dir)
 
-    def run_zsh(self, command, cwd=None):
-        """Runs a zsh command with the tools sourced."""
+    def run_zsh(self, command, cwd=None, input_text=None):
+        """Runs a command in zsh with the tools sourced."""
         if cwd is None:
             cwd = self.test_dir
 
         full_command = f"source {INIT_SCRIPT} && {command}"
         result = subprocess.run(
-            ["zsh", "-c", full_command], cwd=cwd, capture_output=True, text=True
+            ["zsh", "-c", full_command],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            input=input_text,
         )
         return result
 
@@ -599,7 +610,7 @@ class TestZshCompatibility(unittest.TestCase):
         """Test that wta (which uses bash-specific syntax) works when called from zsh."""
         self.setup_repo()
 
-        res = self.run_zsh("wta new-feature")
+        res = self.run_zsh("wta new-feature", input_text="n\n")
 
         self.assertEqual(
             res.returncode, 0, f"wta failed in zsh: {res.stderr}\n{res.stdout}"
@@ -613,7 +624,7 @@ class TestZshCompatibility(unittest.TestCase):
         """Test that wta handles multi-word descriptions in zsh."""
         self.setup_repo()
 
-        res = self.run_zsh('wta "State Management Feature"')
+        res = self.run_zsh('wta "State Management Feature"', input_text="n\n")
 
         self.assertEqual(
             res.returncode, 0, f"wta failed in zsh: {res.stderr}\n{res.stdout}"
@@ -627,7 +638,7 @@ class TestZshCompatibility(unittest.TestCase):
         self.setup_repo()
 
         # Run wta and then pwd to check we're still in the original directory
-        res = self.run_zsh("wta new-feature && pwd")
+        res = self.run_zsh("wta new-feature && pwd", input_text="n\n")
 
         self.assertEqual(
             res.returncode, 0, f"wta failed in zsh: {res.stderr}\n{res.stdout}"
@@ -668,7 +679,7 @@ class TestZshCompatibility(unittest.TestCase):
         """Ensure we don't get 'bad substitution' errors from bash-specific syntax in zsh."""
         self.setup_repo()
 
-        res = self.run_zsh("wta test-feature")
+        res = self.run_zsh("wta test-feature", input_text="n\n")
 
         self.assertNotIn("bad substitution", res.stderr.lower())
         self.assertNotIn("bad substitution", res.stdout.lower())

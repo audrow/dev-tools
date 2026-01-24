@@ -76,7 +76,7 @@ wta <description|branch-name> [--base|-b base-branch]
 - **Copies all `.env*` files**: Copies `.env`, `.env.local`, `.env.development`, etc.
 - **Symlinks `node_modules`**: If `node_modules` exists, it's symlinked (faster than copying)
 - **Symlinks `.venv`**: Python virtual environments are symlinked too
-- **Copies path to clipboard**: Ready to paste into another terminal
+- **Optional clipboard copy**: Prompts if you want to copy the worktree path to clipboard (defaults to no)
 - **Runs post-setup hook**: Executes `.worktree-setup.sh` if it exists (for project-specific setup)
 - **Opens your IDE** (with confirmation): If `USER_IDE` is set, prompts to open the worktree in your editor (defaults to yes)
 - **Stays in place**: Does not change your current directory
