@@ -54,10 +54,42 @@ Helpers for managing `git worktree` workflows. Uses `fzf` for fuzzy searching.
 | Command | Usage | Description |
 | :--- | :--- | :--- |
 | `wt` | `wt` | Fuzzy search and switch between existing worktrees. |
-| `wta` | `wta <branch> [base]` | Create a new worktree for `<branch>` based on `[base]` (defaults to `main`). |
+| `wta` | `wta <desc> [--base branch]` | Create a new worktree. See details below. |
 | `wtp` | `wtp` | Prune the current worktree (removes the directory and the worktree entry) and returns to the main repository. |
 
 *Note: `wt` requires [fzf](https://github.com/junegunn/fzf) to be installed.*
+
+#### `wta` - Add Worktree
+
+Creates a new worktree with smart defaults and convenience features.
+
+**Usage:**
+```bash
+wta <description|branch-name> [--base|-b base-branch]
+```
+
+**Features:**
+- **Auto-fetch**: Fetches latest from all remotes before creating
+- **Smart branch naming**: Converts descriptions to slugs and prefixes with `$GITHUB_USER/`
+- **Copies `.env`**: If `.env` exists in the main repo, it's copied to the new worktree
+- **Symlinks `node_modules`**: If `node_modules` exists, it's symlinked (faster than copying)
+- **Opens your IDE**: If `USER_IDE` is set, opens the worktree in your editor
+- **Stays in place**: Does not change your current directory
+
+**Environment Variables:**
+- `GITHUB_USER` (required): Your GitHub username for branch prefixing
+- `USER_IDE` (optional): Command to open your IDE (e.g., `code`, `cursor`, `webstorm`)
+
+**Examples:**
+```bash
+# Create worktree for "add login feature" -> branch: youruser/add-login-feature
+wta "add login feature"
+
+# Create worktree based on a different branch
+wta "hotfix" --base release/v2
+
+# If USER_IDE=code, this will also run: code ~/.worktrees/repo/add-login-feature
+```
 
 ### Git Workflow Tools (`git_workflow_tools.sh`)
 

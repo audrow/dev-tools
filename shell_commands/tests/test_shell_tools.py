@@ -121,6 +121,55 @@ class TestShellTools(unittest.TestCase):
         )
         self.assertIn("new-feature", res_wt.stdout)
 
+    def test_wta_copies_env_file(self):
+        """Test that wta copies .env file to the new worktree."""
+        self.setup_repo()
+        
+        # Create a .env file in the main repo
+        env_content = "SECRET_KEY=test123\nDATABASE_URL=postgres://localhost"
+        (Path(self.test_dir) / ".env").write_text(env_content)
+        
+        res = self.run_bash("wta env-test")
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn("Copied .env", res.stdout)
+        
+        # Verify .env was copied
+        worktree_env = Path(self.test_dir) / ".worktrees" / os.path.basename(self.test_dir) / "env-test" / ".env"
+        self.assertTrue(worktree_env.exists(), f".env not found at {worktree_env}")
+        self.assertEqual(worktree_env.read_text(), env_content)
+
+    def test_wta_symlinks_node_modules(self):
+        """Test that wta symlinks node_modules to the new worktree."""
+        self.setup_repo()
+        
+        # Create a node_modules directory in the main repo
+        node_modules = Path(self.test_dir) / "node_modules"
+        node_modules.mkdir()
+        (node_modules / "some-package").mkdir()
+        (node_modules / "some-package" / "index.js").write_text("module.exports = {}")
+        
+        res = self.run_bash("wta node-test")
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn("Symlinked node_modules", res.stdout)
+        
+        # Verify node_modules was symlinked
+        worktree_nm = Path(self.test_dir) / ".worktrees" / os.path.basename(self.test_dir) / "node-test" / "node_modules"
+        self.assertTrue(worktree_nm.is_symlink(), f"node_modules is not a symlink at {worktree_nm}")
+        self.assertTrue((worktree_nm / "some-package" / "index.js").exists())
+
+    def test_wta_stays_in_current_directory(self):
+        """Test that wta does NOT change directory after creating worktree."""
+        self.setup_repo()
+        
+        # Run wta and then pwd to verify we're still in the original directory
+        res = self.run_bash("wta stay-test && pwd")
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        
+        # pwd should output the test_dir, not the worktree
+        # Use realpath to handle macOS /var -> /private/var symlink
+        last_line = res.stdout.strip().split("\n")[-1]
+        self.assertEqual(os.path.realpath(last_line), os.path.realpath(self.test_dir))
+
     def test_gupdate(self):
         local_path, origin_path = self.setup_remote_and_clone()
 
@@ -426,18 +475,18 @@ class TestZshCompatibility(unittest.TestCase):
         self.assertIn("testuser/state-management-feature", res.stdout)
         self.assertNotIn("__BASH_CD__", res.stdout)
 
-    def test_wta_cd_works_in_zsh(self):
-        """Test that wta changes directory correctly when called from zsh."""
+    def test_wta_stays_in_current_directory(self):
+        """Test that wta does NOT change directory (stays in place)."""
         self.setup_repo()
 
-        # Run wta and then pwd to check we're in the new worktree
+        # Run wta and then pwd to check we're still in the original directory
         res = self.run_zsh("wta new-feature && pwd")
 
         self.assertEqual(
             res.returncode, 0, f"wta failed in zsh: {res.stderr}\n{res.stdout}"
         )
-        self.assertIn(".worktrees", res.stdout)
-        self.assertIn("new-feature", res.stdout)
+        # Should NOT be in .worktrees - should still be in original dir
+        self.assertNotIn(".worktrees", res.stdout.split("\n")[-1])
 
     def test_gupdate_works_in_zsh(self):
         """Test that gupdate (simpler command) works in zsh."""

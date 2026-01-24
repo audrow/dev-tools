@@ -20,6 +20,30 @@ wt() {
   fi
 }
 
+# Helper function to set up a new worktree (copy .env, symlink node_modules, open editor)
+_wta_setup_worktree() {
+  local main_repo_path="$1"
+  local target_dir="$2"
+
+  # Copy .env if it exists
+  if [ -f "$main_repo_path/.env" ]; then
+    cp "$main_repo_path/.env" "$target_dir/.env"
+    echo "📋 Copied .env"
+  fi
+
+  # Symlink node_modules if it exists (faster than copying)
+  if [ -d "$main_repo_path/node_modules" ]; then
+    ln -s "$main_repo_path/node_modules" "$target_dir/node_modules"
+    echo "🔗 Symlinked node_modules"
+  fi
+
+  # Open editor if USER_IDE is set
+  if [ -n "$USER_IDE" ]; then
+    echo "🚀 Opening $USER_IDE..."
+    "$USER_IDE" "$target_dir"
+  fi
+}
+
 # WTA: Add Worktree
 # Usage: wta <branch-name> [base-branch]
 wta() {
@@ -99,8 +123,8 @@ wta() {
     if git rev-parse --verify "$candidate" &>/dev/null || git rev-parse --verify "origin/$candidate" &>/dev/null; then
         if git worktree add "$target_dir" "$candidate" 2>/dev/null; then
           echo "✅ Checked out existing branch: $candidate"
-          echo "__BASH_CD__:$target_dir"
-          cd "$target_dir"
+          echo "📂 Worktree: $target_dir"
+          _wta_setup_worktree "$main_repo_path" "$target_dir"
           return 0
         fi
     fi
@@ -139,8 +163,8 @@ wta() {
 
   if git worktree add "$target_dir" -b "$new_branch_name" "$remote_base" $track_flag; then
     echo "✨ Created new branch: $new_branch_name (based on $remote_base)"
-    echo "__BASH_CD__:$target_dir"
-    cd "$target_dir"
+    echo "📂 Worktree: $target_dir"
+    _wta_setup_worktree "$main_repo_path" "$target_dir"
     return 0
   else
     echo "❌ Failed to create worktree."
