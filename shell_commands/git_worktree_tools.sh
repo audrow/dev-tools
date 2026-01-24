@@ -5,7 +5,7 @@
 wt() {
   local selected_worktree
   
-  if ! command -v fzf &> /dev/null; then
+  if ! command_exists fzf; then
     echo "❌ Error: fzf is not installed. Please install fzf to use this command."
     return 1
   fi
@@ -20,21 +20,47 @@ wt() {
   fi
 }
 
-# Helper function to set up a new worktree (copy .env, symlink node_modules, open editor)
+# Helper function to set up a new worktree
 _wta_setup_worktree() {
   local main_repo_path="$1"
   local target_dir="$2"
 
-  # Copy .env if it exists
-  if [ -f "$main_repo_path/.env" ]; then
-    cp "$main_repo_path/.env" "$target_dir/.env"
-    echo "📋 Copied .env"
+  # Copy all .env* files (.env, .env.local, .env.development, etc.)
+  local env_files_copied=0
+  for env_file in "$main_repo_path"/.env*; do
+    if [ -f "$env_file" ]; then
+      cp "$env_file" "$target_dir/$(basename "$env_file")"
+      env_files_copied=$((env_files_copied + 1))
+    fi
+  done
+  if [ $env_files_copied -gt 0 ]; then
+    echo "📋 Copied $env_files_copied .env* file(s)"
   fi
 
   # Symlink node_modules if it exists (faster than copying)
   if [ -d "$main_repo_path/node_modules" ]; then
     ln -s "$main_repo_path/node_modules" "$target_dir/node_modules"
     echo "🔗 Symlinked node_modules"
+  fi
+
+  # Symlink Python .venv if it exists
+  if [ -d "$main_repo_path/.venv" ]; then
+    ln -s "$main_repo_path/.venv" "$target_dir/.venv"
+    echo "🐍 Symlinked .venv"
+  fi
+
+  # Copy worktree path to clipboard
+  if copy_to_clipboard "$target_dir"; then
+    echo "📎 Copied path to clipboard"
+  fi
+
+  # Run post-setup hook if it exists
+  if [ -f "$target_dir/.worktree-setup.sh" ]; then
+    echo "🔧 Running .worktree-setup.sh..."
+    (cd "$target_dir" && bash .worktree-setup.sh)
+  elif [ -f "$main_repo_path/.worktree-setup.sh" ]; then
+    echo "🔧 Running .worktree-setup.sh from main repo..."
+    (cd "$target_dir" && bash "$main_repo_path/.worktree-setup.sh")
   fi
 
   # Open editor if USER_IDE is set
@@ -98,7 +124,7 @@ wta() {
     return 1
   fi
 
-  local main_repo_path=$(git worktree list | head -n 1 | awk '{print $1}')
+  local main_repo_path=$(get_main_worktree_path)
   local repo_name=$(basename "$main_repo_path")
 
   # 3. SLUGIFY INPUT
@@ -175,11 +201,25 @@ wta() {
 # WTP: Prune (Delete current hidden worktree & go home)
 wtp() {
   local current_path=$(pwd)
-  local main_repo_path=$(git worktree list | head -n 1 | awk '{print $1}')
+  local main_repo_path=$(get_main_worktree_path)
 
   if [ "$current_path" = "$main_repo_path" ]; then
     echo "⚠️  You are in the main worktree. Cannot prune."
     return 1
+  fi
+
+  # Get current branch name for display
+  local branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+
+  # Confirmation prompt
+  echo "⚠️  About to delete worktree:"
+  echo "   Path: $current_path"
+  echo "   Branch: $branch_name"
+  echo ""
+  read -p "Are you sure? [y/N] " confirm
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "Cancelled."
+    return 0
   fi
 
   # Move safely back to the main repo
@@ -190,6 +230,6 @@ wtp() {
   # Remove the worktree (and the folder in ~/.worktrees)
   echo "Removing worktree: $current_path"
   # --force might be needed if there are untracked files or unmerged changes, use with caution.
-  # User requested --force in their snippet, so we keep it.
   git worktree remove "$current_path" --force
+  echo "✅ Worktree removed."
 }

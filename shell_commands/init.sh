@@ -16,6 +16,7 @@ SCRIPT_DIR=$(get_script_dir)
 
 # If running in bash, source scripts directly
 if [ -n "$BASH_VERSION" ]; then
+    [ -f "$SCRIPT_DIR/utils.sh" ] && source "$SCRIPT_DIR/utils.sh"
     [ -f "$SCRIPT_DIR/git_aliases.sh" ] && source "$SCRIPT_DIR/git_aliases.sh"
     [ -f "$SCRIPT_DIR/git_worktree_tools.sh" ] && source "$SCRIPT_DIR/git_worktree_tools.sh"
     [ -f "$SCRIPT_DIR/git_workflow_tools.sh" ] && source "$SCRIPT_DIR/git_workflow_tools.sh"
@@ -32,6 +33,7 @@ else
         
         local output
         output=$(bash -c "
+            source '$SCRIPT_DIR/utils.sh' 2>/dev/null
             source '$SCRIPT_DIR/git_aliases.sh' 2>/dev/null
             source '$SCRIPT_DIR/git_worktree_tools.sh' 2>/dev/null
             source '$SCRIPT_DIR/git_workflow_tools.sh' 2>/dev/null

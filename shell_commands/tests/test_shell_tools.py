@@ -131,7 +131,7 @@ class TestShellTools(unittest.TestCase):
         
         res = self.run_bash("wta env-test")
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
-        self.assertIn("Copied .env", res.stdout)
+        self.assertIn("Copied 1 .env* file(s)", res.stdout)
         
         # Verify .env was copied
         worktree_env = Path(self.test_dir) / ".worktrees" / os.path.basename(self.test_dir) / "env-test" / ".env"
@@ -156,6 +156,63 @@ class TestShellTools(unittest.TestCase):
         worktree_nm = Path(self.test_dir) / ".worktrees" / os.path.basename(self.test_dir) / "node-test" / "node_modules"
         self.assertTrue(worktree_nm.is_symlink(), f"node_modules is not a symlink at {worktree_nm}")
         self.assertTrue((worktree_nm / "some-package" / "index.js").exists())
+
+    def test_wta_copies_multiple_env_files(self):
+        """Test that wta copies all .env* files to the new worktree."""
+        self.setup_repo()
+        
+        # Create multiple .env files
+        (Path(self.test_dir) / ".env").write_text("BASE=value")
+        (Path(self.test_dir) / ".env.local").write_text("LOCAL=value")
+        (Path(self.test_dir) / ".env.development").write_text("DEV=value")
+        
+        res = self.run_bash("wta multi-env-test")
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn("Copied 3 .env* file(s)", res.stdout)
+        
+        # Verify all files were copied
+        worktree_dir = Path(self.test_dir) / ".worktrees" / os.path.basename(self.test_dir) / "multi-env-test"
+        self.assertTrue((worktree_dir / ".env").exists())
+        self.assertTrue((worktree_dir / ".env.local").exists())
+        self.assertTrue((worktree_dir / ".env.development").exists())
+
+    def test_wta_symlinks_python_venv(self):
+        """Test that wta symlinks .venv to the new worktree."""
+        self.setup_repo()
+        
+        # Create a .venv directory
+        venv = Path(self.test_dir) / ".venv"
+        venv.mkdir()
+        (venv / "bin").mkdir()
+        (venv / "bin" / "python").write_text("#!/bin/bash\necho python")
+        
+        res = self.run_bash("wta venv-test")
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn("Symlinked .venv", res.stdout)
+        
+        # Verify .venv was symlinked
+        worktree_venv = Path(self.test_dir) / ".worktrees" / os.path.basename(self.test_dir) / "venv-test" / ".venv"
+        self.assertTrue(worktree_venv.is_symlink())
+        self.assertTrue((worktree_venv / "bin" / "python").exists())
+
+    def test_wta_runs_post_setup_hook(self):
+        """Test that wta runs .worktree-setup.sh if it exists."""
+        self.setup_repo()
+        
+        # Create a post-setup hook that creates a marker file
+        hook_content = '#!/bin/bash\necho "hook ran" > .hook-marker'
+        (Path(self.test_dir) / ".worktree-setup.sh").write_text(hook_content)
+        subprocess.check_call(["git", "add", ".worktree-setup.sh"], cwd=self.test_dir)
+        subprocess.check_call(["git", "commit", "-m", "Add hook"], cwd=self.test_dir)
+        
+        res = self.run_bash("wta hook-test")
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn("Running .worktree-setup.sh", res.stdout)
+        
+        # Verify the hook ran (created marker file)
+        worktree_dir = Path(self.test_dir) / ".worktrees" / os.path.basename(self.test_dir) / "hook-test"
+        marker = worktree_dir / ".hook-marker"
+        self.assertTrue(marker.exists(), f"Hook marker not found at {marker}")
 
     def test_wta_stays_in_current_directory(self):
         """Test that wta does NOT change directory after creating worktree."""

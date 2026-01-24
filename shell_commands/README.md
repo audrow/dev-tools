@@ -71,14 +71,27 @@ wta <description|branch-name> [--base|-b base-branch]
 **Features:**
 - **Auto-fetch**: Fetches latest from all remotes before creating
 - **Smart branch naming**: Converts descriptions to slugs and prefixes with `$GITHUB_USER/`
-- **Copies `.env`**: If `.env` exists in the main repo, it's copied to the new worktree
+- **Copies all `.env*` files**: Copies `.env`, `.env.local`, `.env.development`, etc.
 - **Symlinks `node_modules`**: If `node_modules` exists, it's symlinked (faster than copying)
+- **Symlinks `.venv`**: Python virtual environments are symlinked too
+- **Copies path to clipboard**: Ready to paste into another terminal
+- **Runs post-setup hook**: Executes `.worktree-setup.sh` if it exists (for project-specific setup)
 - **Opens your IDE**: If `USER_IDE` is set, opens the worktree in your editor
 - **Stays in place**: Does not change your current directory
 
 **Environment Variables:**
 - `GITHUB_USER` (required): Your GitHub username for branch prefixing
 - `USER_IDE` (optional): Command to open your IDE (e.g., `code`, `cursor`, `webstorm`)
+
+**Post-Setup Hook:**
+
+Create a `.worktree-setup.sh` in your repo root for project-specific setup:
+```bash
+#!/bin/bash
+# .worktree-setup.sh - runs after worktree creation
+npm install        # or: pip install -e .
+cp .env.example .env.local
+```
 
 **Examples:**
 ```bash
@@ -89,6 +102,27 @@ wta "add login feature"
 wta "hotfix" --base release/v2
 
 # If USER_IDE=code, this will also run: code ~/.worktrees/repo/add-login-feature
+```
+
+#### `wtp` - Prune Worktree
+
+Deletes the current worktree and returns to the main repository.
+
+**Features:**
+- **Confirmation prompt**: Shows branch name and path before deleting
+- **Safe navigation**: Automatically moves you back to the main repo
+
+**Example:**
+```bash
+$ wtp
+⚠️  About to delete worktree:
+   Path: /Users/you/.worktrees/repo/my-feature
+   Branch: youruser/my-feature
+
+Are you sure? [y/N] y
+Moving to main repo: /Users/you/code/repo
+Removing worktree: /Users/you/.worktrees/repo/my-feature
+✅ Worktree removed.
 ```
 
 ### Git Workflow Tools (`git_workflow_tools.sh`)
@@ -114,10 +148,21 @@ Convenient wrappers for the Python tools in this repository. These allow you to 
 
 ## How it Works
 
-- `init.sh`: The entry point. It detects its own location and sources the other `.sh` files in the directory.
+- `init.sh`: The entry point. It detects its own location and sources the other `.sh` files in the directory. Handles zsh compatibility by wrapping bash-specific functions.
+- `utils.sh`: Shared utility functions (clipboard, worktree helpers).
 - `git_aliases.sh`: Basic function-based aliases.
 - `git_worktree_tools.sh`: Logic for worktree management, including path sanitization and tracking fixes.
 - `git_workflow_tools.sh`: Multi-step git procedures.
+
+### Utility Functions (`utils.sh`)
+
+Shared helpers available to all scripts:
+
+| Function | Usage | Description |
+| :--- | :--- | :--- |
+| `copy_to_clipboard` | `copy_to_clipboard "text"` | Copies text to clipboard (macOS/Linux). Returns 0 on success. |
+| `get_main_worktree_path` | `path=$(get_main_worktree_path)` | Returns the path to the main (first) worktree. |
+| `command_exists` | `if command_exists fzf; then` | Check if a command is available. |
 
 ## Customization
 
