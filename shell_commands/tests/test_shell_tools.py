@@ -357,7 +357,8 @@ class TestShellTools(unittest.TestCase):
         # gdmbo main
         # Should diff against origin/main (which is the parent)
         # Output file should be git-feature-test.diff
-        res = self.run_bash("gdmbo main", cwd=local_path)
+        # Pass empty input to simulate non-interactive (forces file output)
+        res = self.run_bash("gdmbo main", cwd=local_path, input_text="")
         self.assertEqual(res.returncode, 0, f"gdmbo failed: {res.stderr}")
 
         outfile = downloads / "git-feature-test.diff"

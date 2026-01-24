@@ -113,4 +113,123 @@ gdmbo() {
         return 0
     fi
 }
-    
+
+# GSKIP: Mark files as skip-worktree (ignore local changes)
+# Usage: gskip [file...]
+# If no files provided, uses fzf to select from tracked files
+gskip() {
+    if ! command -v fzf &> /dev/null; then
+        echo "❌ Error: fzf is not installed. Please install fzf to use interactive selection."
+        echo "   Alternatively, provide file paths as arguments: gskip <file1> [file2] ..."
+        return 1
+    fi
+
+    local files=("$@")
+
+    if [ ${#files[@]} -eq 0 ]; then
+        # Interactive selection with fzf
+        echo "🔍 Select files to ignore (TAB to multi-select, ENTER to confirm):"
+        local selected
+        selected=$(git ls-files | fzf --multi --height 40% --layout=reverse --header="Select files to skip-worktree")
+        
+        if [ -z "$selected" ]; then
+            echo "ℹ️  No files selected."
+            return 0
+        fi
+        
+        # Convert newline-separated to array
+        while IFS= read -r file; do
+            files+=("$file")
+        done <<< "$selected"
+    fi
+
+    local count=0
+    for file in "${files[@]}"; do
+        if [ -f "$file" ]; then
+            git update-index --skip-worktree "$file"
+            echo "🙈 Skipping: $file"
+            ((count++))
+        else
+            echo "⚠️  File not found: $file"
+        fi
+    done
+
+    if [ $count -gt 0 ]; then
+        echo "✅ Marked $count file(s) as skip-worktree."
+        echo "💡 Use 'gunskip' to re-enable tracking."
+    fi
+}
+
+# GUNSKIP: Remove skip-worktree flag (re-enable tracking)
+# Usage: gunskip [file...]
+# If no files provided, uses fzf to select from currently skipped files
+gunskip() {
+    # Get list of skip-worktree files
+    local skipped_files
+    skipped_files=$(git ls-files -v | grep '^S ' | cut -c3-)
+
+    if [ -z "$skipped_files" ]; then
+        echo "ℹ️  No files are currently marked as skip-worktree."
+        return 0
+    fi
+
+    local files=("$@")
+
+    if [ ${#files[@]} -eq 0 ]; then
+        if ! command -v fzf &> /dev/null; then
+            echo "❌ Error: fzf is not installed. Please install fzf to use interactive selection."
+            echo "   Alternatively, provide file paths as arguments: gunskip <file1> [file2] ..."
+            echo ""
+            echo "Currently skipped files:"
+            echo "$skipped_files" | sed 's/^/   /'
+            return 1
+        fi
+
+        # Interactive selection with fzf
+        echo "🔍 Select files to re-enable tracking (TAB to multi-select, ENTER to confirm):"
+        local selected
+        selected=$(echo "$skipped_files" | fzf --multi --height 40% --layout=reverse --header="Select files to unskip")
+        
+        if [ -z "$selected" ]; then
+            echo "ℹ️  No files selected."
+            return 0
+        fi
+        
+        # Convert newline-separated to array
+        while IFS= read -r file; do
+            files+=("$file")
+        done <<< "$selected"
+    fi
+
+    local count=0
+    for file in "${files[@]}"; do
+        git update-index --no-skip-worktree "$file" 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo "👁️  Tracking: $file"
+            ((count++))
+        else
+            echo "⚠️  Could not unskip: $file"
+        fi
+    done
+
+    if [ $count -gt 0 ]; then
+        echo "✅ Re-enabled tracking for $count file(s)."
+    fi
+}
+
+# GSKIPPED: List all files marked as skip-worktree
+# Usage: gskipped
+gskipped() {
+    local skipped_files
+    skipped_files=$(git ls-files -v | grep '^S ' | cut -c3-)
+
+    if [ -z "$skipped_files" ]; then
+        echo "ℹ️  No files are currently marked as skip-worktree."
+        return 0
+    fi
+
+    echo "🙈 Files with skip-worktree flag:"
+    echo "$skipped_files" | sed 's/^/   /'
+    echo ""
+    echo "💡 Use 'gunskip' to re-enable tracking."
+}
