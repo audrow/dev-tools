@@ -111,6 +111,8 @@ else
     wta() { _run_bash_func_interactive wta "$@"; }
     wtp() { _run_bash_func_interactive wtp "$@"; }
     wto() { _run_bash_func_interactive wto "$@"; }
+    wtlock() { _run_bash_func_interactive wtlock "$@"; }
+    wtunlock() { _run_bash_func_interactive wtunlock "$@"; }
     
     # Git workflow tools
     gupdate() { _run_bash_func gupdate "$@"; }

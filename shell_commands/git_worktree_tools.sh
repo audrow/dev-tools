@@ -426,3 +426,87 @@ wto() {
     echo "❌ Cancelled."
   fi
 }
+
+# WTLOCK: Lock root worktree to prevent commits
+# Usage: wtlock
+wtlock() {
+  local main_repo_path=$(get_main_worktree_path)
+  local hook_path="$main_repo_path/.git/hooks/pre-commit"
+  
+  if [ -f "$hook_path" ]; then
+    # Check if it's our lock hook
+    if grep -q "WORKTREE_LOCK" "$hook_path" 2>/dev/null; then
+      echo "🔒 Root worktree is already locked."
+      return 0
+    else
+      echo "⚠️  Warning: A pre-commit hook already exists at:"
+      echo "   $hook_path"
+      if ! _prompt_yn "Overwrite it with the lock hook?" "N"; then
+        echo "❌ Cancelled."
+        return 1
+      fi
+    fi
+  fi
+  
+  # Create hooks directory if it doesn't exist
+  mkdir -p "$main_repo_path/.git/hooks"
+  
+  # Create the lock hook
+  cat > "$hook_path" << 'EOF'
+#!/bin/bash
+# WORKTREE_LOCK: Prevents commits in the root worktree
+# Created by wtlock command
+
+# Get the root worktree path
+root_path=$(git worktree list | head -n 1 | awk '{print $1}')
+current_path=$(git rev-parse --show-toplevel 2>/dev/null)
+
+# Check if we're in the root worktree
+if [ "$current_path" = "$root_path" ]; then
+  echo ""
+  echo "❌ ERROR: Commits are blocked in the root worktree!"
+  echo ""
+  echo "   This repository uses named worktrees for development."
+  echo "   Please create a worktree with: wta <branch-name>"
+  echo ""
+  echo "   Current location: $current_path"
+  echo "   Root worktree: $root_path"
+  echo ""
+  echo "   To unlock: wtunlock"
+  echo ""
+  exit 1
+fi
+
+exit 0
+EOF
+  
+  chmod +x "$hook_path"
+  echo "🔒 Root worktree locked! Commits are now blocked."
+  echo "   Hook installed: $hook_path"
+  echo "   To unlock: wtunlock"
+}
+
+# WTUNLOCK: Unlock root worktree to allow commits
+# Usage: wtunlock
+wtunlock() {
+  local main_repo_path=$(get_main_worktree_path)
+  local hook_path="$main_repo_path/.git/hooks/pre-commit"
+  
+  if [ ! -f "$hook_path" ]; then
+    echo "ℹ️  No pre-commit hook found. Root worktree is already unlocked."
+    return 0
+  fi
+  
+  # Check if it's our lock hook
+  if ! grep -q "WORKTREE_LOCK" "$hook_path" 2>/dev/null; then
+    echo "⚠️  Warning: The pre-commit hook exists but wasn't created by wtlock."
+    echo "   Hook location: $hook_path"
+    if ! _prompt_yn "Delete it anyway?" "N"; then
+      echo "❌ Cancelled."
+      return 1
+    fi
+  fi
+  
+  rm "$hook_path"
+  echo "🔓 Root worktree unlocked! Commits are now allowed."
+}
