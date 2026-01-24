@@ -93,8 +93,8 @@ gdmbo() {
     local safe_branch="${current_branch//\//-}"
     local outfile="${GDIFF_DIR}/git-${safe_branch}.diff"
 
-    # Check if user wants to force file output
-    if [ "${GDMBO_FORCE_FILE:-0}" = "1" ]; then
+    # Check if user wants to force file output or stdin is not interactive
+    if [ "${GDMBO_FORCE_FILE:-0}" = "1" ] || [ ! -t 0 ]; then
         git diff "$base" > "$outfile"
         echo "💾 Diff saved to $outfile"
         return 0
