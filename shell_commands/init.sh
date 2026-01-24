@@ -57,10 +57,60 @@ else
         return $ret
     }
     
+    _run_bash_func_interactive() {
+        local func_name="$1"
+        shift
+        
+        # For interactive functions, we need to preserve stdin/stdout/stderr
+        # Use a temp file to capture the __BASH_CD__ marker
+        local temp_file=$(mktemp)
+        
+        bash -c "
+            source '$SCRIPT_DIR/utils.sh' 2>/dev/null
+            source '$SCRIPT_DIR/git_aliases.sh' 2>/dev/null
+            source '$SCRIPT_DIR/git_worktree_tools.sh' 2>/dev/null
+            source '$SCRIPT_DIR/git_workflow_tools.sh' 2>/dev/null
+            source '$SCRIPT_DIR/python_tools.sh' 2>/dev/null
+            
+            # Redirect __BASH_CD__ marker to temp file
+            exec 3>'$temp_file'
+            
+            # Override echo to intercept __BASH_CD__ markers
+            echo() {
+                if [[ \"\$1\" == __BASH_CD__:* ]]; then
+                    builtin echo \"\$@\" >&3
+                else
+                    builtin echo \"\$@\"
+                fi
+            }
+            
+            $func_name \"\$@\"
+            exit_code=\$?
+            exec 3>&-
+            exit \$exit_code
+        " -- "$@"
+        local ret=$?
+        
+        # Extract cd path if present
+        local cd_path
+        if [ -f "$temp_file" ]; then
+            cd_path=$(grep "^__BASH_CD__:" "$temp_file" | tail -1 | cut -d: -f2-)
+            rm -f "$temp_file"
+        fi
+        
+        # Change directory if requested
+        if [ -n "$cd_path" ] && [ -d "$cd_path" ]; then
+            cd "$cd_path"
+        fi
+        
+        return $ret
+    }
+    
     # Git worktree tools (these may cd)
     wt() { _run_bash_func wt "$@"; }
-    wta() { _run_bash_func wta "$@"; }
-    wtp() { _run_bash_func wtp "$@"; }
+    wta() { _run_bash_func_interactive wta "$@"; }
+    wtp() { _run_bash_func_interactive wtp "$@"; }
+    wto() { _run_bash_func_interactive wto "$@"; }
     
     # Git workflow tools
     gupdate() { _run_bash_func gupdate "$@"; }

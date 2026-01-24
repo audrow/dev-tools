@@ -414,8 +414,8 @@ class TestShellTools(unittest.TestCase):
         # Create branch testuser/foo
         subprocess.check_call(["git", "branch", "testuser/foo"], cwd=self.test_dir)
 
-        # wta "foo" should checkout "testuser/foo"
-        res = self.run_bash('wta "foo"')
+        # wta "foo" should checkout "testuser/foo" (answer 'n' to force recreate)
+        res = self.run_bash('echo "n" | wta "foo"')
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Checked out existing branch: testuser/foo", res.stdout)
 
@@ -473,6 +473,66 @@ class TestShellTools(unittest.TestCase):
         res = self.run_bash('wta "foo"')
         self.assertEqual(res.returncode, 1)
         self.assertIn("Error: GITHUB_USER environment variable is not set", res.stdout)
+
+    def test_wta_existing_branch_checkout_by_default(self):
+        """Test that wta checks out existing branch when not forcing recreate."""
+        self.setup_repo()
+
+        # Create an initial branch
+        subprocess.check_call(
+            ["git", "checkout", "-b", "testuser/existing"], cwd=self.test_dir
+        )
+        Path(self.test_dir, "file.txt").write_text("original content")
+        subprocess.check_call(["git", "add", "."], cwd=self.test_dir)
+        subprocess.check_call(["git", "commit", "-m", "Initial"], cwd=self.test_dir)
+        subprocess.check_call(["git", "checkout", "main"], cwd=self.test_dir)
+
+        # Run wta with 'n' to not force recreate
+        res = self.run_bash('echo "n" | wta existing')
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn("already exists", res.stdout)
+        self.assertIn("Checked out existing branch", res.stdout)
+
+        # Verify the existing branch was checked out
+        worktree_dir = (
+            Path(self.test_dir)
+            / ".worktrees"
+            / os.path.basename(self.test_dir)
+            / "existing"
+        )
+        self.assertTrue(worktree_dir.exists())
+        self.assertTrue((worktree_dir / "file.txt").exists())
+
+    def test_wta_existing_branch_force_recreate(self):
+        """Test that wta can force recreate an existing branch."""
+        self.setup_repo()
+
+        # Create an initial branch with content
+        subprocess.check_call(
+            ["git", "checkout", "-b", "testuser/recreate-test"], cwd=self.test_dir
+        )
+        Path(self.test_dir, "old-file.txt").write_text("old content")
+        subprocess.check_call(["git", "add", "."], cwd=self.test_dir)
+        subprocess.check_call(["git", "commit", "-m", "Old commit"], cwd=self.test_dir)
+        subprocess.check_call(["git", "checkout", "main"], cwd=self.test_dir)
+
+        # Run wta with 'y' to force recreate, then 'n' to skip opening IDE
+        res = self.run_bash('echo -e "y\\nn" | wta "recreate test"')
+        self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
+        self.assertIn("already exists", res.stdout)
+        self.assertIn("Force recreate", res.stdout)
+        self.assertIn("Deleting existing branch", res.stdout)
+        self.assertIn("Created new branch", res.stdout)
+
+        # Verify new branch was created (without old file)
+        worktree_dir = (
+            Path(self.test_dir)
+            / ".worktrees"
+            / os.path.basename(self.test_dir)
+            / "recreate-test"
+        )
+        self.assertTrue(worktree_dir.exists())
+        self.assertFalse((worktree_dir / "old-file.txt").exists())
 
 
 class TestZshCompatibility(unittest.TestCase):

@@ -53,11 +53,12 @@ Helpers for managing `git worktree` workflows. Uses `fzf` for fuzzy searching.
 
 | Command | Usage | Description |
 | :--- | :--- | :--- |
-| `wt` | `wt` | Fuzzy search and switch between existing worktrees. |
-| `wta` | `wta <desc> [--base branch]` | Create a new worktree. See details below. |
-| `wtp` | `wtp` | Prune the current worktree (removes the directory and the worktree entry) and returns to the main repository. |
+| `wt` | `wt` | **Switch to worktree**: Fuzzy search and switch to a worktree. |
+| `wta` | `wta <desc> [--base branch]` | **Add worktree**: Create a new worktree. See details below. |
+| `wtp` | `wtp` | **Prune worktree**: Select a worktree with fzf and delete it (with confirmation). |
+| `wto` | `wto` | **Open worktree**: Select a worktree with fzf and open it in your IDE (`$USER_IDE`). |
 
-*Note: `wt` requires [fzf](https://github.com/junegunn/fzf) to be installed.*
+*Note: All worktree commands require [fzf](https://github.com/junegunn/fzf) to be installed.*
 
 #### `wta` - Add Worktree
 
@@ -71,12 +72,13 @@ wta <description|branch-name> [--base|-b base-branch]
 **Features:**
 - **Auto-fetch**: Fetches latest from all remotes before creating
 - **Smart branch naming**: Converts descriptions to slugs and prefixes with `$GITHUB_USER/`
+- **Existing branch handling**: If branch exists, prompts to checkout existing or force recreate
 - **Copies all `.env*` files**: Copies `.env`, `.env.local`, `.env.development`, etc.
 - **Symlinks `node_modules`**: If `node_modules` exists, it's symlinked (faster than copying)
 - **Symlinks `.venv`**: Python virtual environments are symlinked too
 - **Copies path to clipboard**: Ready to paste into another terminal
 - **Runs post-setup hook**: Executes `.worktree-setup.sh` if it exists (for project-specific setup)
-- **Opens your IDE**: If `USER_IDE` is set, opens the worktree in your editor
+- **Opens your IDE** (with confirmation): If `USER_IDE` is set, prompts to open the worktree in your editor (defaults to yes)
 - **Stays in place**: Does not change your current directory
 
 **Environment Variables:**
@@ -101,28 +103,53 @@ wta "add login feature"
 # Create worktree based on a different branch
 wta "hotfix" --base release/v2
 
-# If USER_IDE=code, this will also run: code ~/.worktrees/repo/add-login-feature
+# If branch exists, you'll be prompted:
+# ⚠️  Branch 'youruser/existing' already exists.
+# Force recreate? This will delete the existing branch. [y/N]
+# - Enter 'n' to checkout the existing branch
+# - Enter 'y' to delete and recreate it fresh
+
+# If USER_IDE=code, you'll be prompted:
+# 🚀 Open in code? [Y/n]
 ```
 
 #### `wtp` - Prune Worktree
 
-Deletes the current worktree and returns to the main repository.
+Select and delete a worktree using fzf.
 
 **Features:**
+- **Fuzzy search**: Use fzf to select which worktree to delete
 - **Confirmation prompt**: Shows branch name and path before deleting
-- **Safe navigation**: Automatically moves you back to the main repo
+- **Safe navigation**: If you're in the worktree being deleted, automatically moves you to the main repo
 
 **Example:**
 ```bash
 $ wtp
+🗑️  Select worktree to delete...
+[fzf interface shows list of worktrees]
+
 ⚠️  About to delete worktree:
    Path: /Users/you/.worktrees/repo/my-feature
    Branch: youruser/my-feature
 
 Are you sure? [y/N] y
-Moving to main repo: /Users/you/code/repo
 Removing worktree: /Users/you/.worktrees/repo/my-feature
 ✅ Worktree removed.
+```
+
+#### `wto` - Open Worktree in IDE
+
+Select a worktree and open it in your configured IDE.
+
+**Requirements:**
+- `USER_IDE` environment variable must be set (e.g., `export USER_IDE=code`)
+
+**Example:**
+```bash
+$ wto
+💻 Select worktree to open in code...
+[fzf interface shows list of worktrees]
+🚀 Opening /Users/you/.worktrees/repo/my-feature in code...
 ```
 
 ### Git Workflow Tools (`git_workflow_tools.sh`)

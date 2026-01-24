@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# WT: Switch Worktree
+# WT: Switch to Worktree (using fzf)
 # Usage: wt
 wt() {
   local selected_worktree
@@ -10,9 +10,9 @@ wt() {
     return 1
   fi
 
+  echo "📂 Select worktree to switch to..."
   # Lists worktrees, uses fzf, and grabs the path (first column)
-  # awk '{print $1}' gets the path.
-  selected_worktree=$(git worktree list | fzf --height 40% --layout=reverse | awk '{print $1}')
+  selected_worktree=$(git worktree list | fzf --height 40% --layout=reverse --header="Select worktree" | awk '{print $1}')
 
   if [ -n "$selected_worktree" ]; then
     echo "__BASH_CD__:$selected_worktree"
@@ -65,8 +65,12 @@ _wta_setup_worktree() {
 
   # Open editor if USER_IDE is set
   if [ -n "$USER_IDE" ]; then
-    echo "🚀 Opening $USER_IDE..."
-    "$USER_IDE" "$target_dir"
+    echo -n "🚀 Open in $USER_IDE? [Y/n] "
+    read open_ide
+    # Default to yes if empty or starts with Y/y
+    if [[ -z "$open_ide" || "$open_ide" =~ ^[Yy] ]]; then
+      "$USER_IDE" "$target_dir"
+    fi
   fi
 }
 
@@ -144,17 +148,44 @@ wta() {
   # STRATEGY 1: Try to add as an EXISTING branch (local or remote-tracking)
   # Check: exact input, slug, or $GITHUB_USER/slug
   local candidates=("$input_text" "$slug" "${GITHUB_USER}/$slug")
+  local existing_branch=""
 
   for candidate in "${candidates[@]}"; do
     if git rev-parse --verify "$candidate" &>/dev/null || git rev-parse --verify "origin/$candidate" &>/dev/null; then
-        if git worktree add "$target_dir" "$candidate" 2>/dev/null; then
-          echo "✅ Checked out existing branch: $candidate"
-          echo "📂 Worktree: $target_dir"
-          _wta_setup_worktree "$main_repo_path" "$target_dir"
-          return 0
-        fi
+        existing_branch="$candidate"
+        break
     fi
   done
+
+  if [ -n "$existing_branch" ]; then
+    echo "⚠️  Branch '$existing_branch' already exists."
+    echo -n "Force recreate? This will delete the existing branch. [y/N] "
+    read force_recreate
+    
+    if [[ "$force_recreate" =~ ^[Yy]$ ]]; then
+      echo "🗑️  Deleting existing branch '$existing_branch'..."
+      # Remove worktree if it exists for this branch
+      local existing_worktree=$(git worktree list | grep "$existing_branch" | awk '{print $1}')
+      if [ -n "$existing_worktree" ]; then
+        git worktree remove "$existing_worktree" --force 2>/dev/null
+      fi
+      # Delete the branch
+      git branch -D "$existing_branch" 2>/dev/null
+      git branch -Dr "origin/$existing_branch" 2>/dev/null
+      # Continue to create new branch below
+    else
+      # Checkout existing branch
+      if git worktree add "$target_dir" "$existing_branch" 2>/dev/null; then
+        echo "✅ Checked out existing branch: $existing_branch"
+        echo "📂 Worktree: $target_dir"
+        _wta_setup_worktree "$main_repo_path" "$target_dir"
+        return 0
+      else
+        echo "❌ Failed to checkout existing branch."
+        return 1
+      fi
+    fi
+  fi
 
   # STRATEGY 2: Create a NEW branch
   # Construct new branch name with prefix
@@ -198,38 +229,76 @@ wta() {
   fi
 }
 
-# WTP: Prune (Delete current hidden worktree & go home)
+# WTP: Prune Worktree (select with fzf, then delete)
+# Usage: wtp
 wtp() {
-  local current_path=$(pwd)
   local main_repo_path=$(get_main_worktree_path)
-
-  if [ "$current_path" = "$main_repo_path" ]; then
-    echo "⚠️  You are in the main worktree. Cannot prune."
+  
+  if ! command_exists fzf; then
+    echo "❌ Error: fzf is not installed. Please install fzf to use this command."
     return 1
   fi
 
-  # Get current branch name for display
-  local branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+  echo "🗑️  Select worktree to delete..."
+  # Get worktree list excluding the main worktree
+  local selected_line=$(git worktree list | tail -n +2 | fzf --height 40% --layout=reverse --header="Select worktree to delete")
+  
+  if [ -z "$selected_line" ]; then
+    echo "Cancelled."
+    return 0
+  fi
+  
+  local worktree_path=$(echo "$selected_line" | awk '{print $1}')
+  local branch_name=$(echo "$selected_line" | awk '{print $3}' | tr -d '[]')
 
   # Confirmation prompt
+  echo ""
   echo "⚠️  About to delete worktree:"
-  echo "   Path: $current_path"
+  echo "   Path: $worktree_path"
   echo "   Branch: $branch_name"
   echo ""
-  read -p "Are you sure? [y/N] " confirm
+  echo -n "Are you sure? [y/N] "
+  read confirm
   if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
     echo "Cancelled."
     return 0
   fi
 
-  # Move safely back to the main repo
-  echo "Moving to main repo: $main_repo_path"
-  echo "__BASH_CD__:$main_repo_path"
-  cd "$main_repo_path"
+  # If we're currently in the worktree being deleted, move to main first
+  local current_path=$(pwd)
+  if [[ "$current_path" == "$worktree_path"* ]]; then
+    echo "Moving to main repo: $main_repo_path"
+    echo "__BASH_CD__:$main_repo_path"
+    cd "$main_repo_path"
+  fi
 
-  # Remove the worktree (and the folder in ~/.worktrees)
-  echo "Removing worktree: $current_path"
-  # --force might be needed if there are untracked files or unmerged changes, use with caution.
-  git worktree remove "$current_path" --force
+  # Remove the worktree
+  echo "Removing worktree: $worktree_path"
+  git worktree remove "$worktree_path" --force
   echo "✅ Worktree removed."
+}
+
+# WTO: Open Worktree in IDE (select with fzf)
+# Usage: wto
+wto() {
+  if [ -z "$USER_IDE" ]; then
+    echo "❌ Error: USER_IDE environment variable is not set."
+    echo "Please set it in your shell configuration (e.g., export USER_IDE=code)."
+    return 1
+  fi
+  
+  if ! command_exists fzf; then
+    echo "❌ Error: fzf is not installed. Please install fzf to use this command."
+    return 1
+  fi
+
+  echo "💻 Select worktree to open in $USER_IDE..."
+  local selected_worktree=$(git worktree list | fzf --height 40% --layout=reverse --header="Select worktree to open" | awk '{print $1}')
+
+  if [ -n "$selected_worktree" ]; then
+    echo "🚀 Opening $selected_worktree in $USER_IDE..."
+    "$USER_IDE" "$selected_worktree"
+  else
+    echo "Cancelled."
+  fi
 }
