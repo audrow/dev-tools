@@ -35,11 +35,21 @@ _prompt_yn() {
   
   # Print prompt to stderr to avoid polluting stdout
   echo -n "$question $prompt_suffix " >&2
-  read response
+  if [ "${PROMPT_ASSUME_YES:-0}" = "1" ]; then
+    return 0
+  fi
+
+  if ! read -r response; then
+    response=""
+  fi
   
-  # If empty, use default
+  # If empty, use default for TTYs, or default to "No" for non-interactive
   if [ -z "$response" ]; then
-    response="$default"
+    if [ -t 0 ]; then
+      response="$default"
+    else
+      response="N"
+    fi
   fi
   
   if [[ "$response" =~ ^[Yy]$ ]]; then

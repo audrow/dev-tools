@@ -65,7 +65,8 @@ else
         # Use a temp file to capture the __BASH_CD__ marker
         local temp_file=$(mktemp)
         
-        bash -i -c "
+        if [ -t 0 ]; then
+            bash -c "
             source '$SCRIPT_DIR/utils.sh' 2>/dev/null
             source '$SCRIPT_DIR/git_aliases.sh' 2>/dev/null
             source '$SCRIPT_DIR/git_worktree_tools.sh' 2>/dev/null
@@ -89,6 +90,32 @@ else
             exec 3>&-
             exit \$exit_code
         " -- "$@" </dev/tty
+        else
+            bash -c "
+            source '$SCRIPT_DIR/utils.sh' 2>/dev/null
+            source '$SCRIPT_DIR/git_aliases.sh' 2>/dev/null
+            source '$SCRIPT_DIR/git_worktree_tools.sh' 2>/dev/null
+            source '$SCRIPT_DIR/git_workflow_tools.sh' 2>/dev/null
+            source '$SCRIPT_DIR/python_tools.sh' 2>/dev/null
+            
+            # Redirect __BASH_CD__ marker to temp file
+            exec 3>'$temp_file'
+            
+            # Override echo to intercept __BASH_CD__ markers
+            echo() {
+                if [[ \"\$1\" == __BASH_CD__:* ]]; then
+                    builtin echo \"\$@\" >&3
+                else
+                    builtin echo \"\$@\"
+                fi
+            }
+            
+            $func_name \"\$@\"
+            exit_code=\$?
+            exec 3>&-
+            exit \$exit_code
+        " -- "$@"
+        fi
         local ret=$?
         
         # Extract cd path if present
