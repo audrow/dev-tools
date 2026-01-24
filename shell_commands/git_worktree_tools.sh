@@ -69,8 +69,6 @@ _select_worktree() {
 # WT: Switch to Worktree (using fzf)
 # Usage: wt
 wt() {
-  _require_fzf || return 1
-  
   # Check if there are any worktrees besides the main one
   local worktree_count=$(git worktree list | wc -l | tr -d ' ')
   if [ "$worktree_count" -le 1 ]; then
@@ -78,6 +76,8 @@ wt() {
     echo "💡 Use 'wta <description>' to create a new worktree."
     return 0
   fi
+  
+  _require_fzf || return 1
   
   echo "📂 Select worktree to switch to..."
   local selected_worktree=$(_select_worktree "Select worktree")
