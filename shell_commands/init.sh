@@ -3,12 +3,12 @@
 # Function to get the current script directory
 get_script_dir() {
     if [ -n "$BASH_VERSION" ]; then
-        cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+        echo "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     elif [ -n "$ZSH_VERSION" ]; then
-        cd "$(dirname "${(%):-%N}")" && pwd
+        echo "$(cd "$(dirname "${(%):-%x}")" && pwd)"
     else
         # Fallback
-        cd "$(dirname "$0")" && pwd
+        echo "$(cd "$(dirname "$0")" && pwd)"
     fi
 }
 
