@@ -339,5 +339,145 @@ class TestShellTools(unittest.TestCase):
         self.assertIn("Error: GITHUB_USER environment variable is not set", res.stdout)
 
 
+class TestZshCompatibility(unittest.TestCase):
+    """Tests that shell tools work when sourced from zsh."""
+
+    @classmethod
+    def setUpClass(cls):
+        # Check if zsh is available
+        result = subprocess.run(["which", "zsh"], capture_output=True)
+        if result.returncode != 0:
+            raise unittest.SkipTest("zsh not available")
+
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.cwd = os.getcwd()
+        os.chdir(self.test_dir)
+        self.original_home = os.environ.get("HOME")
+        os.environ["HOME"] = self.test_dir
+
+        # Configure git for testing
+        subprocess.check_call(
+            ["git", "config", "--global", "user.email", "you@example.com"]
+        )
+        subprocess.check_call(["git", "config", "--global", "user.name", "Your Name"])
+        subprocess.check_call(
+            ["git", "config", "--global", "init.defaultBranch", "main"]
+        )
+        os.environ["GITHUB_USER"] = "testuser"
+
+    def tearDown(self):
+        os.chdir(self.cwd)
+        if self.original_home:
+            os.environ["HOME"] = self.original_home
+        else:
+            if "HOME" in os.environ:
+                del os.environ["HOME"]
+
+        if "GITHUB_USER" in os.environ:
+            del os.environ["GITHUB_USER"]
+
+        shutil.rmtree(self.test_dir)
+
+    def run_zsh(self, command, cwd=None):
+        """Runs a zsh command with the tools sourced."""
+        if cwd is None:
+            cwd = self.test_dir
+
+        full_command = f"source {INIT_SCRIPT} && {command}"
+        result = subprocess.run(
+            ["zsh", "-c", full_command], cwd=cwd, capture_output=True, text=True
+        )
+        return result
+
+    def setup_repo(self):
+        """Sets up a basic git repo."""
+        subprocess.check_call(["git", "init"], cwd=self.test_dir)
+        Path("README.md").write_text("# Test Repo")
+        subprocess.check_call(["git", "add", "."], cwd=self.test_dir)
+        subprocess.check_call(
+            ["git", "commit", "-m", "Initial commit"], cwd=self.test_dir
+        )
+
+    def test_wta_works_in_zsh(self):
+        """Test that wta (which uses bash-specific syntax) works when called from zsh."""
+        self.setup_repo()
+
+        res = self.run_zsh("wta new-feature")
+
+        self.assertEqual(
+            res.returncode, 0, f"wta failed in zsh: {res.stderr}\n{res.stdout}"
+        )
+        self.assertIn("Created new branch", res.stdout)
+        self.assertIn("testuser/new-feature", res.stdout)
+        # Ensure no __BASH_CD__ marker leaks to output
+        self.assertNotIn("__BASH_CD__", res.stdout)
+
+    def test_wta_with_spaces_works_in_zsh(self):
+        """Test that wta handles multi-word descriptions in zsh."""
+        self.setup_repo()
+
+        res = self.run_zsh('wta "State Management Feature"')
+
+        self.assertEqual(
+            res.returncode, 0, f"wta failed in zsh: {res.stderr}\n{res.stdout}"
+        )
+        self.assertIn("Created new branch", res.stdout)
+        self.assertIn("testuser/state-management-feature", res.stdout)
+        self.assertNotIn("__BASH_CD__", res.stdout)
+
+    def test_wta_cd_works_in_zsh(self):
+        """Test that wta changes directory correctly when called from zsh."""
+        self.setup_repo()
+
+        # Run wta and then pwd to check we're in the new worktree
+        res = self.run_zsh("wta new-feature && pwd")
+
+        self.assertEqual(
+            res.returncode, 0, f"wta failed in zsh: {res.stderr}\n{res.stdout}"
+        )
+        self.assertIn(".worktrees", res.stdout)
+        self.assertIn("new-feature", res.stdout)
+
+    def test_gupdate_works_in_zsh(self):
+        """Test that gupdate (simpler command) works in zsh."""
+        # Setup origin and clone
+        origin_path = Path(self.test_dir) / "origin"
+        origin_path.mkdir()
+        subprocess.check_call(["git", "init", "--bare"], cwd=origin_path)
+
+        setup_path = Path(self.test_dir) / "setup_repo"
+        setup_path.mkdir()
+        subprocess.check_call(["git", "init"], cwd=setup_path)
+        (setup_path / "README.md").write_text("# Origin")
+        subprocess.check_call(["git", "add", "."], cwd=setup_path)
+        subprocess.check_call(["git", "commit", "-m", "Initial"], cwd=setup_path)
+        subprocess.check_call(
+            ["git", "remote", "add", "origin", str(origin_path)], cwd=setup_path
+        )
+        subprocess.check_call(["git", "push", "-u", "origin", "main"], cwd=setup_path)
+
+        local_path = Path(self.test_dir) / "local"
+        subprocess.check_call(
+            ["git", "clone", str(origin_path), "local"], cwd=self.test_dir
+        )
+
+        res = self.run_zsh("gupdate", cwd=local_path)
+
+        self.assertEqual(
+            res.returncode, 0, f"gupdate failed in zsh: {res.stderr}\n{res.stdout}"
+        )
+
+    def test_no_bad_substitution_error(self):
+        """Ensure we don't get 'bad substitution' errors from bash-specific syntax in zsh."""
+        self.setup_repo()
+
+        res = self.run_zsh("wta test-feature")
+
+        self.assertNotIn("bad substitution", res.stderr.lower())
+        self.assertNotIn("bad substitution", res.stdout.lower())
+        self.assertEqual(res.returncode, 0, f"Got error: {res.stderr}\n{res.stdout}")
+
+
 if __name__ == "__main__":
     unittest.main()

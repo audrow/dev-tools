@@ -15,6 +15,7 @@ wt() {
   selected_worktree=$(git worktree list | fzf --height 40% --layout=reverse | awk '{print $1}')
 
   if [ -n "$selected_worktree" ]; then
+    echo "__BASH_CD__:$selected_worktree"
     cd "$selected_worktree"
   fi
 }
@@ -98,6 +99,7 @@ wta() {
     if git rev-parse --verify "$candidate" &>/dev/null || git rev-parse --verify "origin/$candidate" &>/dev/null; then
         if git worktree add "$target_dir" "$candidate" 2>/dev/null; then
           echo "✅ Checked out existing branch: $candidate"
+          echo "__BASH_CD__:$target_dir"
           cd "$target_dir"
           return 0
         fi
@@ -137,6 +139,7 @@ wta() {
 
   if git worktree add "$target_dir" -b "$new_branch_name" "$remote_base" $track_flag; then
     echo "✨ Created new branch: $new_branch_name (based on $remote_base)"
+    echo "__BASH_CD__:$target_dir"
     cd "$target_dir"
     return 0
   else
@@ -157,6 +160,7 @@ wtp() {
 
   # Move safely back to the main repo
   echo "Moving to main repo: $main_repo_path"
+  echo "__BASH_CD__:$main_repo_path"
   cd "$main_repo_path"
 
   # Remove the worktree (and the folder in ~/.worktrees)
