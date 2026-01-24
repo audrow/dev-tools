@@ -241,7 +241,11 @@ Advanced workflow automation.
 | `gupdate` | `gupdate [base]` | Updates your branch: **Fetch** -> **Merge** `origin/[base]` into current branch. |
 | `gmb` | `gmb [base]` | Finds the merge-base between `origin/[base]` and `HEAD`. Automatically falls back to `master` if `main` is missing. |
 | `gdiff_out` | `gdiff_out [args]` | Runs `git diff [args]` and saves the output to `~/Downloads/git-<branch>.diff`. Useful for copying diffs over SSH. |
-| `gdmbo` | `gdmbo [base]` | Combines `gmb` and `gdiff_out`. Diffs from the merge-base of `origin/[base]` and saves to `~/Downloads/git-<branch>.diff`. |
+| `gdmbo` | `gdmbo [base]` | Diffs from merge-base of `origin/[base]`. **Copies to clipboard** by default, falls back to file if clipboard unavailable. Set `GDMBO_FORCE_FILE=1` to always write to file. |
+
+**Environment Variables:**
+- `GDIFF_DIR` (optional): Directory for diff output files (default: `~/Downloads`)
+- `GDMBO_FORCE_FILE` (optional): Set to `1` to force `gdmbo` to always write to file instead of clipboard
 
 ### Python Tools Aliases (`python_tools.sh`)
 

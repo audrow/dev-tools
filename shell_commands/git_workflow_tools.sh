@@ -75,15 +75,42 @@ gdiff_out() {
     echo "💾 Diff saved to $outfile"
 }
 
-# GDMBO: Diff from merge-base with origin/main and save to ~/Downloads/git-<branch>.diff
+# GDMBO: Diff from merge-base with origin/main and copy to clipboard (or save to file)
+# By default, copies to clipboard. If clipboard fails, saves to ~/Downloads/git-<branch>.diff
+# Set GDMBO_FORCE_FILE=1 to always write to file instead of clipboard
 # Usage: gdmbo [base_branch]
 gdmbo() {
     local base=$(gmb "$1")
-    if [ -n "$base" ]; then
-        gdiff_out "$base"
-    else
+    if [ -z "$base" ]; then
         echo "❌ Could not find merge-base."
         return 1
+    fi
+
+    local current_branch=$(git branch --show-current)
+    if [ -z "$current_branch" ]; then
+        current_branch="HEAD"
+    fi
+    local safe_branch="${current_branch//\//-}"
+    local outfile="${GDIFF_DIR}/git-${safe_branch}.diff"
+
+    # Check if user wants to force file output
+    if [ "${GDMBO_FORCE_FILE:-0}" = "1" ]; then
+        git diff "$base" > "$outfile"
+        echo "💾 Diff saved to $outfile"
+        return 0
+    fi
+
+    # Try clipboard first
+    local diff_output=$(git diff "$base")
+    if copy_to_clipboard "$diff_output"; then
+        echo "📋 Diff copied to clipboard"
+        return 0
+    else
+        # Fallback to file if clipboard fails
+        echo "⚠️  Clipboard not available, saving to file instead..."
+        echo "$diff_output" > "$outfile"
+        echo "💾 Diff saved to $outfile"
+        return 0
     fi
 }
     
