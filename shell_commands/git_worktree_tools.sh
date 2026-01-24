@@ -71,6 +71,14 @@ _select_worktree() {
 wt() {
   _require_fzf || return 1
   
+  # Check if there are any worktrees besides the main one
+  local worktree_count=$(git worktree list | wc -l | tr -d ' ')
+  if [ "$worktree_count" -le 1 ]; then
+    echo "ℹ️  No additional worktrees found. Only the main worktree exists."
+    echo "💡 Use 'wta <description>' to create a new worktree."
+    return 0
+  fi
+  
   echo "📂 Select worktree to switch to..."
   local selected_worktree=$(_select_worktree "Select worktree")
 
@@ -331,6 +339,28 @@ wtp() {
   echo "Removing worktree: $worktree_path"
   git worktree remove "$worktree_path" --force
   echo "✅ Worktree removed."
+  
+  # Ask if user wants to delete the branch
+  if [ -n "$branch_name" ]; then
+    echo ""
+    if _prompt_yn "🗑️  Delete branch '$branch_name'?" "Y"; then
+      # Try regular delete first
+      if git branch -d "$branch_name" 2>/dev/null; then
+        echo "✅ Branch deleted."
+      else
+        # Regular delete failed, ask about force delete
+        echo "⚠️  Branch '$branch_name' is not fully merged."
+        if _prompt_yn "Force delete with -D?" "N"; then
+          git branch -D "$branch_name"
+          echo "✅ Branch force deleted."
+        else
+          echo "Branch kept."
+        fi
+      fi
+    else
+      echo "Branch kept."
+    fi
+  fi
 }
 
 # WTO: Open Worktree in IDE (select with fzf)

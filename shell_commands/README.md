@@ -41,10 +41,21 @@ Commonly used git commands shortened for speed.
 
 | Command | Git Equivalent | Description |
 | :--- | :--- | :--- |
-| `glog` | `git log --oneline --graph --decorate` | Visual, compact git log. |
+| `gl` | `git log --oneline --graph --decorate` | Visual, compact git log (one-liners). |
+| `glog` | `git log` | Show commit logs (full). |
 | `gst` | `git status` | Show the working tree status. |
+| `gs` | `git status` | Short alias for git status. |
+| `gb` | `git branch` | List, create, or delete branches. |
+| `gbd` | `git branch -d` | Delete a branch. |
 | `gco` | `git checkout` | Checkout a branch or paths. |
-| `gl` | `git pull` | Fetch from and integrate with another repository. |
+| `gca` | `git commit -a` | Commit all tracked changes. |
+| `gcm` | `git commit -m` | Commit with a message. |
+| `gd` | `git diff` | Show changes between commits, commit and working tree, etc. |
+| `gds` | `git diff --stat` | Show diff statistics. |
+| `gdstaged` | `git diff --staged` | Show changes that are staged. |
+| `gdmb` | diff merge-base | Show diff from merge-base with origin/main (or master). |
+| `gdmbs` | diff merge-base --stat | Show diff statistics from merge-base. |
+| `gpl` | `git pull` | Fetch from and integrate with another repository. |
 | `gp` | `git push` | Update remote refs along with associated objects. |
 
 ### Git Worktree Tools (`git_worktree_tools.sh`)
@@ -53,9 +64,9 @@ Helpers for managing `git worktree` workflows. Uses `fzf` for fuzzy searching.
 
 | Command | Usage | Description |
 | :--- | :--- | :--- |
-| `wt` | `wt` | **Switch to worktree**: Fuzzy search and switch to a worktree. |
+| `wt` | `wt` | **Switch to worktree**: Fuzzy search and switch to a worktree. Shows helpful message if only main worktree exists. |
 | `wta` | `wta <desc> [--base branch]` | **Add worktree**: Create a new worktree. See details below. |
-| `wtp` | `wtp` | **Prune worktree**: Select a worktree with fzf and delete it (with confirmation). |
+| `wtp` | `wtp` | **Prune worktree**: Select a worktree with fzf, delete it, and optionally delete the branch (with confirmation). |
 | `wto` | `wto` | **Open worktree**: Select a worktree with fzf and open it in your IDE (`$USER_IDE`). |
 
 *Note: All worktree commands require [fzf](https://github.com/junegunn/fzf) to be installed.*
@@ -120,6 +131,9 @@ Select and delete a worktree using fzf.
 **Features:**
 - **Fuzzy search**: Use fzf to select which worktree to delete
 - **Confirmation prompt**: Shows branch name and path before deleting
+- **Branch deletion**: After removing worktree, prompts to delete the branch (defaults to yes)
+  - First tries `git branch -d` (safe delete)
+  - If branch is not fully merged, asks if you want to force delete with `-D`
 - **Safe navigation**: If you're in the worktree being deleted, automatically moves you to the main repo
 
 **Example:**
@@ -135,6 +149,9 @@ $ wtp
 Are you sure? [y/N] y
 Removing worktree: /Users/you/.worktrees/repo/my-feature
 ✅ Worktree removed.
+
+🗑️  Delete branch 'youruser/my-feature'? [Y/n] y
+✅ Branch deleted.
 ```
 
 #### `wto` - Open Worktree in IDE
@@ -161,7 +178,7 @@ Advanced workflow automation.
 | `gupdate` | `gupdate [base]` | Updates your branch: **Fetch** -> **Merge** `origin/[base]` into current branch. |
 | `gmb` | `gmb [base]` | Finds the merge-base between `origin/[base]` and `HEAD`. Automatically falls back to `master` if `main` is missing. |
 | `gdiff_out` | `gdiff_out [args]` | Runs `git diff [args]` and saves the output to `~/Downloads/git-<branch>.diff`. Useful for copying diffs over SSH. |
-| `gdmb` | `gdmb [base]` | Combines `gmb` and `gdiff_out`. Diffs from the merge-base of `origin/[base]` and saves to `~/Downloads/git-<branch>.diff`. |
+| `gdmbo` | `gdmbo [base]` | Combines `gmb` and `gdiff_out`. Diffs from the merge-base of `origin/[base]` and saves to `~/Downloads/git-<branch>.diff`. |
 
 ### Python Tools Aliases (`python_tools.sh`)
 
