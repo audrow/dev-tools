@@ -374,6 +374,101 @@ class TestShellTools(unittest.TestCase):
         self.assertTrue(outfile.exists())
         self.assertIn("diff --git a/feat.txt", outfile.read_text())
 
+    def test_gdmbo_with_target(self):
+        local_path, origin_path = self.setup_remote_and_clone()
+        downloads = Path(self.test_dir) / "Downloads"
+        downloads.mkdir()
+
+        # Create a feature branch but stay on main
+        subprocess.check_call(
+            ["git", "checkout", "-b", "feature/other"], cwd=local_path
+        )
+        (local_path / "other.txt").write_text("Other Feature")
+        subprocess.check_call(["git", "add", "."], cwd=local_path)
+        subprocess.check_call(["git", "commit", "-m", "Other commit"], cwd=local_path)
+        subprocess.check_call(["git", "checkout", "main"], cwd=local_path)
+
+        # 1. Test with positional args: gdmbo main feature/other
+        # Should diff feature/other against origin/main
+        # Output file should be git-feature-other.diff
+        res = self.run_bash("gdmbo main feature/other", cwd=local_path, input_text="")
+        self.assertEqual(res.returncode, 0, f"gdmbo positional failed: {res.stderr}")
+
+        outfile = downloads / "git-feature-other.diff"
+        self.assertTrue(outfile.exists())
+        content = outfile.read_text()
+        self.assertIn("diff --git a/other.txt", content)
+
+        # Remove outfile to test next case
+        outfile.unlink()
+
+        # 2. Test with flag: gdmbo -t feature/other
+        # Should imply base=main, target=feature/other
+        res = self.run_bash("gdmbo -t feature/other", cwd=local_path, input_text="")
+        self.assertEqual(res.returncode, 0, f"gdmbo flag failed: {res.stderr}")
+
+        self.assertTrue(outfile.exists())
+        content = outfile.read_text()
+        self.assertIn("diff --git a/other.txt", content)
+
+    def test_gdmb(self):
+        local_path, origin_path = self.setup_remote_and_clone()
+
+        # Create feature branch
+        subprocess.check_call(["git", "checkout", "-b", "feature/test"], cwd=local_path)
+        (local_path / "feat.txt").write_text("Feature")
+        subprocess.check_call(["git", "add", "."], cwd=local_path)
+        subprocess.check_call(["git", "commit", "-m", "Feature commit"], cwd=local_path)
+
+        # 1. gdmb (defaults to main vs HEAD)
+        res = self.run_bash("gdmb", cwd=local_path)
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("diff --git a/feat.txt", res.stdout)
+
+        # 2. gdmb main feature/test (explicit target) from main branch
+        subprocess.check_call(["git", "checkout", "main"], cwd=local_path)
+        res = self.run_bash("gdmb main feature/test", cwd=local_path)
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("diff --git a/feat.txt", res.stdout)
+
+    def test_gexec(self):
+        self.setup_repo()
+
+        # 1. Modify a tracked file (Working Tree vs HEAD)
+        (Path(self.test_dir) / "README.md").write_text("Modified Content")
+        # gexec cat
+        res = self.run_bash("gexec cat", cwd=self.test_dir)
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("Modified Content", res.stdout)
+
+        # 2. No changes
+        subprocess.check_call(["git", "checkout", "."], cwd=self.test_dir)
+        res = self.run_bash("gexec cat", cwd=self.test_dir)
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("No changed files", res.stdout)
+
+    def test_gexec_mb(self):
+        local_path, origin_path = self.setup_remote_and_clone()
+
+        # Create feature branch
+        subprocess.check_call(["git", "checkout", "-b", "feature"], cwd=local_path)
+        (local_path / "feat.txt").write_text("Feature Content")
+        subprocess.check_call(["git", "add", "."], cwd=local_path)
+        subprocess.check_call(["git", "commit", "-m", "Feature"], cwd=local_path)
+
+        # 1. gexec_mb (defaults to main vs HEAD) - should run on feat.txt
+        # Command: grep "Feature"
+        # grep on a single file doesn't print filename by default, just content
+        res = self.run_bash("gexec_mb grep 'Feature'", cwd=local_path)
+        self.assertEqual(res.returncode, 0, f"gexec_mb failed: {res.stderr}")
+        self.assertIn("Feature Content", res.stdout)
+
+        # 2. gexec_mb with flag target (explicitly pointing to current branch)
+        # We stay on 'feature' branch so the file exists
+        res = self.run_bash("gexec_mb -t feature -- grep 'Feature'", cwd=local_path)
+        self.assertEqual(res.returncode, 0, f"gexec_mb flag failed: {res.stderr}")
+        self.assertIn("Feature Content", res.stdout)
+
     def test_gdo(self):
         self.setup_repo()
         downloads = Path(self.test_dir) / "Downloads"

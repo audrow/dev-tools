@@ -53,10 +53,11 @@ gupdate() {
     fi
 }
 
-# GMB: Find merge-base between origin/main (or master) and HEAD
-# Usage: gmb [base_branch]
+# GMB: Find merge-base between origin/main (or master) and HEAD (or specified target)
+# Usage: gmb [base_branch] [target_ref]
 gmb() {
     local base_branch="${1:-main}"
+    local target_ref="${2:-HEAD}"
     local remote_ref="origin/$base_branch"
 
     if ! git rev-parse --verify "$remote_ref" &>/dev/null; then
@@ -65,7 +66,7 @@ gmb() {
         fi
     fi
 
-    git merge-base "$remote_ref" HEAD
+    git merge-base "$remote_ref" "$target_ref"
 }
 
 # GDIFF_OUT: Diff and save to a file
@@ -86,30 +87,58 @@ gdiff_out() {
 # GDMBO: Diff from merge-base with origin/main and copy to clipboard (or save to file)
 # By default, copies to clipboard. If clipboard fails, saves to ~/Downloads/git-<branch>.diff
 # Set GDMBO_FORCE_FILE=1 to always write to file instead of clipboard
-# Usage: gdmbo [base_branch]
+# Usage: gdmbo [base_branch] [target_ref]
+#        gdmbo -t <target_ref> [base_branch]
 gdmbo() {
-    local base=$(gmb "$1")
+    local base_branch=""
+    local target_ref=""
+    
+    while [[ "$#" -gt 0 ]]; do
+        case $1 in
+            -t|--target) target_ref="$2"; shift ;;
+            *) 
+                if [ -z "$base_branch" ]; then
+                    base_branch="$1"
+                else
+                    target_ref="$1"
+                fi
+                ;;
+        esac
+        shift
+    done
+
+    # Defaults
+    if [ -z "$base_branch" ]; then base_branch="main"; fi
+    if [ -z "$target_ref" ]; then target_ref="HEAD"; fi
+
+    local base=$(gmb "$base_branch" "$target_ref")
     if [ -z "$base" ]; then
         echo "❌ Could not find merge-base."
         return 1
     fi
 
-    local current_branch=$(git branch --show-current)
-    if [ -z "$current_branch" ]; then
-        current_branch="HEAD"
+    local safe_branch
+    if [ "$target_ref" == "HEAD" ]; then
+        local current_branch=$(git branch --show-current)
+        if [ -z "$current_branch" ]; then
+            current_branch="HEAD"
+        fi
+        safe_branch="${current_branch//\//-}"
+    else
+        safe_branch="${target_ref//\//-}"
     fi
-    local safe_branch="${current_branch//\//-}"
+    
     local outfile="${GDIFF_DIR}/git-${safe_branch}.diff"
 
     # Check if user wants to force file output or stdin is not interactive
     if [ "${GDMBO_FORCE_FILE:-0}" = "1" ] || [ ! -t 0 ]; then
-        git diff "$base" > "$outfile"
+        git diff "$base" "$target_ref" > "$outfile"
         echo "💾 Diff saved to $outfile"
         return 0
     fi
 
     # Try clipboard first
-    local diff_output=$(git diff "$base")
+    local diff_output=$(git diff "$base" "$target_ref")
     if copy_to_clipboard "$diff_output"; then
         echo "📋 Diff copied to clipboard"
         return 0
@@ -282,4 +311,73 @@ gskipped() {
     echo "$skipped_files" | sed 's/^/   /'
     echo ""
     echo "💡 Use 'gunskip' to re-enable tracking."
+}
+
+# GEXEC: Run a command on files changed in the working tree (vs HEAD)
+# Usage: gexec <command> [args...]
+# Example: gexec pnpm exec prettier --write
+gexec() {
+    if [ $# -eq 0 ]; then
+        echo "Usage: gexec <command> [args...]"
+        return 1
+    fi
+
+    # Check if inside a git repo
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "❌ Not in a git repository."
+        return 1
+    fi
+
+    local files=$(git diff --name-only --diff-filter=d HEAD)
+    if [ -z "$files" ]; then
+        echo "ℹ️  No changed files found (Working Tree vs HEAD)."
+        return 0
+    fi
+    
+    echo "🏃 Running command on $(echo "$files" | wc -l | tr -d ' ') file(s)..."
+    echo "$files" | xargs "$@"
+}
+
+# GEXEC_MB: Run a command on files changed against merge-base
+# Usage: gexec_mb [-b base] [-t target] <command> [args...]
+# Example: gexec_mb eslint
+#          gexec_mb -b main -t feature -- ls -l
+gexec_mb() {
+    local base_branch=""
+    local target_ref=""
+    local cmd=()
+    
+    while [[ "$#" -gt 0 ]]; do
+        case $1 in
+            -b|--base) base_branch="$2"; shift ;;
+            -t|--target) target_ref="$2"; shift ;;
+            --) shift; cmd+=("$@"); break ;;
+            *) cmd+=("$1") ;;
+        esac
+        shift
+    done
+
+    if [ ${#cmd[@]} -eq 0 ]; then
+        echo "Usage: gexec_mb [-b base] [-t target] <command> [args...]"
+        return 1
+    fi
+
+    # Defaults
+    if [ -z "$base_branch" ]; then base_branch="main"; fi
+    if [ -z "$target_ref" ]; then target_ref="HEAD"; fi
+
+    local merge_base=$(gmb "$base_branch" "$target_ref")
+    if [ -z "$merge_base" ]; then
+        echo "❌ Could not find merge-base."
+        return 1
+    fi
+    
+    local files=$(git diff --name-only --diff-filter=d "$merge_base" "$target_ref")
+    if [ -z "$files" ]; then
+        echo "ℹ️  No changed files found ($base_branch...$target_ref)."
+        return 0
+    fi
+    
+    echo "🏃 Running command on $(echo "$files" | wc -l | tr -d ' ') file(s)..."
+    echo "$files" | xargs "${cmd[@]}"
 }

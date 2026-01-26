@@ -62,10 +62,14 @@ function gdstaged() {
 }
 
 # Git diff merge-base
+# Usage: gdmb [base_branch] [target_ref]
 function gdmb() {
-    local merge_base=$(gmb "$1")
+    local base_branch="${1:-main}"
+    local target_ref="${2:-HEAD}"
+    local merge_base=$(gmb "$base_branch" "$target_ref")
+    
     if [ -n "$merge_base" ]; then
-        git diff "$merge_base"
+        git diff "$merge_base" "$target_ref"
     else
         echo "❌ Could not find merge-base."
         return 1
@@ -73,10 +77,14 @@ function gdmb() {
 }
 
 # Git diff merge-base stat
+# Usage: gdmbs [base_branch] [target_ref]
 function gdmbs() {
-    local merge_base=$(gmb "$1")
+    local base_branch="${1:-main}"
+    local target_ref="${2:-HEAD}"
+    local merge_base=$(gmb "$base_branch" "$target_ref")
+
     if [ -n "$merge_base" ]; then
-        git diff --stat "$merge_base"
+        git diff --stat "$merge_base" "$target_ref"
     else
         echo "❌ Could not find merge-base."
         return 1

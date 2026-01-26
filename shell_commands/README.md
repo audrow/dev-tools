@@ -238,10 +238,12 @@ Advanced workflow automation.
 
 | Command | Usage | Description |
 | :--- | :--- | :--- |
-| `gupdate` | `gupdate [base]` | Updates your branch: **Fetch** -> **Merge** `origin/[base]` into current branch. |
-| `gmb` | `gmb [base]` | Finds the merge-base between `origin/[base]` and `HEAD`. Automatically falls back to `master` if `main` is missing. |
+| `gupdate` | `gupdate [base]` | Updates your branch: **Fetch** -> **Merge** `origin/[base]` -> **Push** to `origin`. |
+| `gmb` | `gmb [base] [target]` | Finds the merge-base between `origin/[base]` and `HEAD` (or `target` ref). Automatically falls back to `master` if `main` is missing. |
 | `gdiff_out` | `gdiff_out [args]` | Runs `git diff [args]` and saves the output to `~/Downloads/git-<branch>.diff`. Useful for copying diffs over SSH. |
-| `gdmbo` | `gdmbo [base]` | Diffs from merge-base of `origin/[base]`. **Copies to clipboard** by default, falls back to file if clipboard unavailable. Set `GDMBO_FORCE_FILE=1` to always write to file. |
+| `gdmbo` | `gdmbo [base] [target]` | Diffs from merge-base of `origin/[base]`. Use `[base] [target]` or `-t [target]` to diff a specific branch against base. **Copies to clipboard** by default, falls back to file. |
+| `gexec` | `gexec <cmd> [args]` | Runs a command on files changed in the working tree (vs HEAD). Example: `gexec prettier --write` |
+| `gexec_mb` | `gexec_mb [base] <cmd>` | Runs a command on files changed between merge-base (default `origin/main`) and HEAD. Supports `-t <target>`. |
 | `gskip` | `gskip [file...]` | Mark files as skip-worktree (ignore local changes). Uses fzf for interactive selection if no files provided. |
 | `gunskip` | `gunskip [file...]` | Remove skip-worktree flag (re-enable tracking). Uses fzf to select from skipped files if no arguments. |
 | `gskipped` | `gskipped` | List all files currently marked as skip-worktree. |
