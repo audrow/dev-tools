@@ -38,6 +38,14 @@ gupdate() {
     echo "🚀 Merging '$remote_ref' into '$current_branch'..."
     if git merge --no-edit "$remote_ref"; then
         echo "✅ Merge successful."
+
+        echo "⬆️ Pushing changes to origin..."
+        if git push origin "$current_branch"; then
+            echo "✅ Push successful."
+        else
+            echo "❌ Push failed."
+            return 1
+        fi
     else
         echo "❌ Merge failed (conflict?)."
         echo "   Fix conflicts and commit the result."

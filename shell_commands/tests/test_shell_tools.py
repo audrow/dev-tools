@@ -280,6 +280,7 @@ class TestShellTools(unittest.TestCase):
         # 3. Run gupdate
         res = self.run_bash("gupdate", cwd=local_path)
         self.assertEqual(res.returncode, 0, f"gupdate failed: {res.stderr}")
+        self.assertIn("Push successful", res.stdout)
 
         # 4. Verify merge (we should see Remote commit and Local commit)
         res_log = subprocess.run(
@@ -292,6 +293,14 @@ class TestShellTools(unittest.TestCase):
         # Depending on git config, it might be a merge commit.
         # "Merge remote-tracking branch 'origin/main'" is standard default message
         self.assertIn("Merge remote-tracking branch 'origin/main'", res_log.stdout)
+
+        # 5. Verify push (Origin should now have Local commit)
+        # We can check this by fetching in setup_repo and checking logs
+        subprocess.check_call(["git", "pull", "origin", "main"], cwd=setup_path)
+        res_origin_log = subprocess.run(
+            ["git", "log", "--oneline"], cwd=setup_path, capture_output=True, text=True
+        )
+        self.assertIn("Local commit", res_origin_log.stdout)
 
     def test_gmb(self):
         local_path, origin_path = self.setup_remote_and_clone()
