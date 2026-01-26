@@ -36,7 +36,7 @@ gupdate() {
     fi
 
     echo "🚀 Merging '$remote_ref' into '$current_branch'..."
-    if git merge "$remote_ref"; then
+    if git merge --no-edit "$remote_ref"; then
         echo "✅ Merge successful."
     else
         echo "❌ Merge failed (conflict?)."
