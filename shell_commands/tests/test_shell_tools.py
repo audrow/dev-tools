@@ -365,6 +365,51 @@ class TestShellTools(unittest.TestCase):
         self.assertTrue(outfile.exists())
         self.assertIn("diff --git a/feat.txt", outfile.read_text())
 
+    def test_gdo(self):
+        self.setup_repo()
+        downloads = Path(self.test_dir) / "Downloads"
+        downloads.mkdir()
+
+        # 1. Unstaged changes
+        Path("unstaged.txt").write_text("Unstaged")
+
+        # gdo (no args) -> git diff (unstaged)
+        # Forces file output due to non-interactive
+        # Branch is main -> git-main.diff
+        # Since unstaged.txt is not tracked, git diff is empty unless we add it first?
+        # git diff only shows modified tracked files.
+        # Let's add it first.
+        subprocess.check_call(["git", "add", "unstaged.txt"], cwd=self.test_dir)
+        # Now it is staged. git diff is empty. git diff --cached has it.
+        # Wait, I want unstaged.
+        (Path(self.test_dir) / "README.md").write_text("Modified README")
+        # README is tracked. Modified is unstaged.
+
+        res = self.run_bash("gdo", cwd=self.test_dir, input_text="")
+        self.assertEqual(res.returncode, 0, f"gdo failed: {res.stderr}")
+
+        outfile = downloads / "git-main.diff"
+        self.assertTrue(outfile.exists())
+        content = outfile.read_text()
+        self.assertIn("diff --git a/README.md", content)
+        self.assertIn("Modified README", content)
+
+        # 2. With arguments (e.g. HEAD^)
+        # Commit the changes so we have something to diff against HEAD^
+        subprocess.check_call(["git", "add", "."], cwd=self.test_dir)
+        subprocess.check_call(
+            ["git", "commit", "-m", "Second commit"], cwd=self.test_dir
+        )
+
+        # gdo HEAD^
+        res = self.run_bash("gdo HEAD^", cwd=self.test_dir, input_text="")
+        self.assertEqual(res.returncode, 0, f"gdo HEAD^ failed: {res.stderr}")
+
+        content = outfile.read_text()
+        self.assertIn("diff --git a/README.md", content)
+        # It should show the changes introduced in Second commit
+        self.assertIn("Modified README", content)
+
     def test_wta_quoted_description_no_base(self):
         self.setup_repo()
 

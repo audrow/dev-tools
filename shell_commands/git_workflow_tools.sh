@@ -114,6 +114,41 @@ gdmbo() {
     fi
 }
 
+# GDO: Diff against a target (or current unstaged changes) and copy to clipboard (or save to file)
+# By default, copies to clipboard. If clipboard fails, saves to ~/Downloads/git-<branch>.diff
+# Set GDO_FORCE_FILE=1 to always write to file instead of clipboard
+# Usage: gdo [target] (e.g. gdo, gdo HEAD^, gdo main)
+gdo() {
+    local diff_args="$@"
+
+    local current_branch=$(git branch --show-current)
+    if [ -z "$current_branch" ]; then
+        current_branch="HEAD"
+    fi
+    local safe_branch="${current_branch//\//-}"
+    local outfile="${GDIFF_DIR}/git-${safe_branch}.diff"
+
+    # Check if user wants to force file output or stdin is not interactive
+    if [ "${GDO_FORCE_FILE:-0}" = "1" ] || [ ! -t 0 ]; then
+        git diff $diff_args > "$outfile"
+        echo "💾 Diff saved to $outfile"
+        return 0
+    fi
+
+    # Try clipboard first
+    local diff_output=$(git diff $diff_args)
+    if copy_to_clipboard "$diff_output"; then
+        echo "📋 Diff copied to clipboard"
+        return 0
+    else
+        # Fallback to file if clipboard fails
+        echo "⚠️  Clipboard not available, saving to file instead..."
+        echo "$diff_output" > "$outfile"
+        echo "💾 Diff saved to $outfile"
+        return 0
+    fi
+}
+
 # GSKIP: Mark files as skip-worktree (ignore local changes)
 # Usage: gskip [file...]
 # If no files provided, uses fzf to select from tracked files
