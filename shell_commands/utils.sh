@@ -9,20 +9,20 @@ copy_to_clipboard() {
   
   if command -v pbcopy &> /dev/null; then
     # macOS
-    echo -n "$text" | pbcopy
-    return 0
+    echo -n "$text" | pbcopy 2>/dev/null
+    return $?
   elif command -v xclip &> /dev/null; then
     # Linux with xclip
-    echo -n "$text" | xclip -selection clipboard
-    return 0
+    echo -n "$text" | xclip -selection clipboard 2>/dev/null
+    return $?
   elif command -v xsel &> /dev/null; then
     # Linux with xsel
-    echo -n "$text" | xsel --clipboard --input
-    return 0
+    echo -n "$text" | xsel --clipboard --input 2>/dev/null
+    return $?
   elif command -v wl-copy &> /dev/null; then
     # Wayland
-    echo -n "$text" | wl-copy
-    return 0
+    echo -n "$text" | wl-copy 2>/dev/null
+    return $?
   fi
   
   return 1
