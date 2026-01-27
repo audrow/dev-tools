@@ -22,8 +22,7 @@ class TestDiffContext(unittest.TestCase):
         subprocess.check_call(
             ["git", "config", "--global", "user.email", "you@example.com"]
         )
-        subprocess.check_call(["git", "config", "--global", "user.name", "Your Name"]
-        )
+        subprocess.check_call(["git", "config", "--global", "user.name", "Your Name"])
         subprocess.check_call(
             ["git", "config", "--global", "init.defaultBranch", "main"]
         )
@@ -55,11 +54,11 @@ class TestDiffContext(unittest.TestCase):
     def setup_repo_with_large_file(self):
         """Sets up a repo with a file containing 100 lines."""
         subprocess.check_call(["git", "init"], cwd=self.test_dir)
-        
+
         # Create a file with 100 lines
         lines = [f"Line {i}" for i in range(1, 101)]
         Path(self.test_dir, "large_file.txt").write_text("\n".join(lines))
-        
+
         subprocess.check_call(["git", "add", "."], cwd=self.test_dir)
         subprocess.check_call(
             ["git", "commit", "-m", "Initial commit"], cwd=self.test_dir
@@ -76,10 +75,10 @@ class TestDiffContext(unittest.TestCase):
         setup_path = Path(self.test_dir) / "setup_repo"
         setup_path.mkdir()
         subprocess.check_call(["git", "init"], cwd=setup_path)
-        
+
         lines = [f"Line {i}" for i in range(1, 101)]
         (setup_path / "large_file.txt").write_text("\n".join(lines))
-        
+
         subprocess.check_call(["git", "add", "."], cwd=setup_path)
         subprocess.check_call(["git", "commit", "-m", "Initial"], cwd=setup_path)
         subprocess.check_call(
@@ -98,7 +97,7 @@ class TestDiffContext(unittest.TestCase):
     def test_gdo_full_context(self):
         """Test that gdo shows full context (more than 3 lines)."""
         lines = self.setup_repo_with_large_file()
-        
+
         # Mock Downloads dir
         downloads = Path(self.test_dir) / "Downloads"
         downloads.mkdir()
@@ -115,18 +114,18 @@ class TestDiffContext(unittest.TestCase):
         outfile = downloads / "git-main.diff"
         self.assertTrue(outfile.exists())
         content = outfile.read_text()
-        
+
         # Check for diff header
         self.assertIn("diff --git a/large_file.txt", content)
-        
+
         # Check for the change
         self.assertIn("+Line 50 Modified", content)
-        
+
         # Check for context far away (e.g., Line 1, Line 100)
         # Default git diff shows only 3 lines of context.
         # With -U9999, it should show everything.
         self.assertIn("Line 1", content)
-        self.assertIn("Line 10", content) 
+        self.assertIn("Line 10", content)
         self.assertIn("Line 90", content)
         self.assertIn("Line 100", content)
 
@@ -135,31 +134,32 @@ class TestDiffContext(unittest.TestCase):
         local_path, lines = self.setup_remote_and_clone_with_large_file()
         downloads = Path(self.test_dir) / "Downloads"
         downloads.mkdir()
-        
+
         # Create a feature branch
         subprocess.check_call(["git", "checkout", "-b", "feature"], cwd=local_path)
-        
+
         # Modify line 50
         lines[49] = "Line 50 Modified"
         (local_path / "large_file.txt").write_text("\n".join(lines))
-        
+
         subprocess.check_call(["git", "add", "."], cwd=local_path)
         subprocess.check_call(["git", "commit", "-m", "Modify line 50"], cwd=local_path)
 
-        # Run gdmbo main
-        res = self.run_bash("gdmbo main", cwd=local_path, input_text="")
+        # Run gdmbo (defaults to HEAD vs auto-detected base)
+        res = self.run_bash("gdmbo", cwd=local_path, input_text="")
         self.assertEqual(res.returncode, 0, f"gdmbo failed: {res.stderr}")
 
         outfile = downloads / "git-feature.diff"
         self.assertTrue(outfile.exists())
         content = outfile.read_text()
-        
+
         # Check for the change
         self.assertIn("+Line 50 Modified", content)
-        
+
         # Check for context
         self.assertIn("Line 1", content)
         self.assertIn("Line 100", content)
+
 
 if __name__ == "__main__":
     unittest.main()

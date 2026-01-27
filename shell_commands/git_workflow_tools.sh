@@ -3,6 +3,29 @@
 # Directory where git diffs will be saved
 GDIFF_DIR="${GDIFF_DIR:-$HOME/Downloads}"
 
+# Defensive sourcing of utils.sh
+# Check if utils.sh functions are available, otherwise try to source it
+if ! command -v copy_to_clipboard >/dev/null 2>&1; then
+    # Try to find utils.sh relative to this script
+    if [ -n "$BASH_SOURCE" ]; then
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    elif [ -n "$ZSH_VERSION" ]; then
+        SCRIPT_DIR="$(cd "$(dirname "${(%):-%x}")" && pwd)"
+    else
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    fi
+
+    if [ -f "$SCRIPT_DIR/utils.sh" ]; then
+        source "$SCRIPT_DIR/utils.sh"
+    else
+        # Fallback if utils.sh is missing to prevent crashes
+        copy_to_clipboard() {
+            echo "⚠️  Clipboard tool missing. Outputting here:"
+            echo "$1"
+        }
+    fi
+fi
+
 # GUPDATE: Update current branch with main (or specified branch)
 # Fetches origin and merges the base branch into the current branch.
 # Usage: gupdate [base_branch]
@@ -53,15 +76,24 @@ gupdate() {
     fi
 }
 
-# GMB: Find merge-base between origin/main (or master) and HEAD (or specified target)
+# GMB: Find merge-base between origin/main (or master/auto-detected) and HEAD (or specified target)
 # Usage: gmb [base_branch] [target_ref]
 gmb() {
-    local base_branch="${1:-main}"
+    local base_branch="$1"
     local target_ref="${2:-HEAD}"
+
+    # If no base provided, try to auto-detect
+    if [ -z "$base_branch" ]; then
+        base_branch=$(detect_base_branch "$target_ref")
+    fi
+
     local remote_ref="origin/$base_branch"
 
     if ! git rev-parse --verify "$remote_ref" &>/dev/null; then
-        if [ "$base_branch" == "main" ] && git rev-parse --verify "origin/master" &>/dev/null; then
+        # Check if base_branch itself exists (local)
+        if git rev-parse --verify "$base_branch" &>/dev/null; then
+             remote_ref="$base_branch"
+        elif [ "$base_branch" == "main" ] && git rev-parse --verify "origin/master" &>/dev/null; then
             remote_ref="origin/master"
         fi
     fi
@@ -84,61 +116,94 @@ gdiff_out() {
     echo "💾 Diff saved to $outfile"
 }
 
-# GDMBO: Diff from merge-base with origin/main and copy to clipboard (or save to file)
-# By default, copies to clipboard. If clipboard fails, saves to ~/Downloads/git-<branch>.diff
-# Set GDMBO_FORCE_FILE=1 to always write to file instead of clipboard
-# Usage: gdmbo [base_branch] [target_ref]
-#        gdmbo -t <target_ref> [base_branch]
-gdmbo() {
-    local base_branch=""
-    local target_ref=""
-    
-    while [[ "$#" -gt 0 ]]; do
-        case $1 in
-            -t|--target) target_ref="$2"; shift ;;
-            *) 
-                if [ -z "$base_branch" ]; then
-                    base_branch="$1"
-                else
-                    target_ref="$1"
-                fi
-                ;;
-        esac
-        shift
+# Helper: Auto-detect the most likely parent branch
+detect_base_branch() {
+    local target_branch="$1"
+    local candidates=("main" "master" "develop" "next" "trunk")
+    local best_base=""
+    local best_timestamp=0
+
+    for candidate in "${candidates[@]}"; do
+        # Check if candidate exists locally or remotely (try local first, then origin/)
+        local candidate_ref="$candidate"
+        if ! git rev-parse --verify "$candidate_ref" >/dev/null 2>&1; then
+             candidate_ref="origin/$candidate"
+             if ! git rev-parse --verify "$candidate_ref" >/dev/null 2>&1; then
+                 continue
+             fi
+        fi
+
+        # Find the common ancestor (merge-base)
+        local mb
+        mb=$(git merge-base "$candidate_ref" "$target_branch" 2>/dev/null)
+        
+        if [ -n "$mb" ]; then
+            # Get the commit time of the merge-base (Unix timestamp)
+            local ts
+            ts=$(git show -s --format=%ct "$mb")
+            
+            # We want the candidate with the MOST RECENT common ancestor
+            if [ "$ts" -gt "$best_timestamp" ]; then
+                best_timestamp=$ts
+                best_base=$candidate_ref
+            fi
+        fi
     done
 
-    # Defaults
-    if [ -z "$base_branch" ]; then base_branch="main"; fi
-    if [ -z "$target_ref" ]; then target_ref="HEAD"; fi
+    # Fallback to 'main' if detection fails completely
+    echo "${best_base:-main}"
+}
 
-    local base=$(gmb "$base_branch" "$target_ref")
-    if [ -z "$base" ]; then
-        echo "❌ Could not find merge-base."
-        return 1
-    fi
+# Helper: Generate diff, output to file or clipboard
+# Usage: _generate_and_copy_diff <base_ref> <target_ref> [diff_args...]
+_generate_and_copy_diff() {
+    local base_ref="$1"
+    local target_ref="$2"
+    shift 2
+    local diff_args=("$@")
 
-    local safe_branch
-    if [ "$target_ref" == "HEAD" ]; then
-        local current_branch=$(git branch --show-current)
-        if [ -z "$current_branch" ]; then
-            current_branch="HEAD"
-        fi
-        safe_branch="${current_branch//\//-}"
+    local diff_output
+    if [ -n "$base_ref" ]; then
+        diff_output=$(git diff -U9999 "${diff_args[@]}" "$base_ref" "$target_ref")
     else
-        safe_branch="${target_ref//\//-}"
+        # For gdo with single target or no target
+        diff_output=$(git diff -U9999 "${diff_args[@]}" "$target_ref")
     fi
+
+    if [ -z "$diff_output" ]; then
+        echo "✅ No differences found."
+        return 0
+    fi
+
+    # Determine safe filename
+    local current_branch=$(git branch --show-current)
+    if [ -z "$current_branch" ]; then current_branch="HEAD"; fi
     
-    local outfile="${GDIFF_DIR}/git-${safe_branch}.diff"
+    # Use target_ref name if valid and not HEAD, otherwise current branch
+    local name_ref="$target_ref"
+    if [ "$name_ref" == "HEAD" ] || [ -z "$name_ref" ]; then
+        name_ref="$current_branch"
+    fi
+    local safe_name="${name_ref//\//-}"
+    local outfile="${GDIFF_DIR}/git-${safe_name}.diff"
 
     # Check if user wants to force file output or stdin is not interactive
-    if [ "${GDMBO_FORCE_FILE:-0}" = "1" ] || [ ! -t 0 ]; then
-        git diff -U9999 "$base" "$target_ref" > "$outfile"
+    # Uses caller's variable name (GDMBO_FORCE_FILE / GDO_FORCE_FILE) dynamically if needed, 
+    # but here we can just use a generic override or check if any variable ends in _FORCE_FILE=1
+    # For simplicity, we assume the caller handles the variable check or we check both?
+    # Let's check a generic FORCE_FILE or specific ones.
+    local force_file="${FORCE_FILE:-0}"
+    if [ "${GDMBO_FORCE_FILE:-0}" = "1" ] || [ "${GDO_FORCE_FILE:-0}" = "1" ]; then
+        force_file=1
+    fi
+
+    if [ "$force_file" = "1" ] || [ ! -t 0 ]; then
+        echo "$diff_output" > "$outfile"
         echo "💾 Diff saved to $outfile"
         return 0
     fi
 
     # Try clipboard first
-    local diff_output=$(git diff -U9999 "$base" "$target_ref")
     if copy_to_clipboard "$diff_output"; then
         echo "📋 Diff copied to clipboard"
         return 0
@@ -151,34 +216,85 @@ gdmbo() {
     fi
 }
 
-# GDO: Diff against a target (or current unstaged changes) and copy to clipboard (or save to file)
-# By default, copies to clipboard. If clipboard fails, saves to ~/Downloads/git-<branch>.diff
-# Set GDO_FORCE_FILE=1 to always write to file instead of clipboard
+# GDMBO: Diff from merge-base with origin/main (or auto-detected base)
+# Usage: gdmbo [target_ref] [base_branch]
+gdmbo() {
+    local target_ref="${1:-HEAD}"
+    local base_branch="${2:-}"
+
+    # Resolve HEAD to actual branch name for better logging/detection if possible
+    if [ "$target_ref" = "HEAD" ]; then
+        local current=$(git branch --show-current)
+        if [ -n "$current" ]; then
+            target_ref="$current"
+        fi
+    fi
+
+    # 1. Auto-Detect Base if not provided
+    if [ -z "$base_branch" ]; then
+        echo "🔍 Auto-detecting base branch for '$target_ref'..."
+        base_branch=$(detect_base_branch "$target_ref")
+        echo "   -> Detected base: '$base_branch'"
+    fi
+
+    # 2. Verify we found a valid base
+    if ! git rev-parse --verify "$base_branch" >/dev/null 2>&1; then
+        # Try origin/$base_branch
+        if git rev-parse --verify "origin/$base_branch" >/dev/null 2>&1; then
+             base_branch="origin/$base_branch"
+        else
+            echo "❌ Base branch '$base_branch' not found. Please specify it manually."
+            return 1
+        fi
+    fi
+
+    # 3. Calculate Merge Base
+    local merge_base
+    merge_base=$(git merge-base "$base_branch" "$target_ref")
+
+    if [ -z "$merge_base" ]; then
+        echo "❌ Could not find common ancestor between $base_branch and $target_ref."
+        return 1
+    fi
+
+    # 4. Generate Diff
+    FORCE_FILE="${GDMBO_FORCE_FILE:-0}" _generate_and_copy_diff "$merge_base" "$target_ref"
+}
+
+# GDO: Diff against a target (or current unstaged changes)
 # Usage: gdo [target] (e.g. gdo, gdo HEAD^, gdo main)
 gdo() {
-    local diff_args="$@"
+    local diff_args=("$@")
+    
+    local diff_output
+    diff_output=$(git diff -U9999 "${diff_args[@]}")
 
-    local current_branch=$(git branch --show-current)
-    if [ -z "$current_branch" ]; then
-        current_branch="HEAD"
+    if [ -z "$diff_output" ]; then
+        echo "✅ No differences found."
+        return 0
     fi
-    local safe_branch="${current_branch//\//-}"
-    local outfile="${GDIFF_DIR}/git-${safe_branch}.diff"
+    
+    # Use the first arg as the "name" for the file, or current branch
+    local name_ref="${1:-}"
+    local current_branch=$(git branch --show-current)
+    if [ -z "$current_branch" ]; then current_branch="HEAD"; fi
+    if [ -z "$name_ref" ]; then name_ref="$current_branch"; fi
 
-    # Check if user wants to force file output or stdin is not interactive
+    local safe_name="${name_ref//\//-}"
+    local outfile="${GDIFF_DIR}/git-${safe_name}.diff"
+
+    # Check force file
     if [ "${GDO_FORCE_FILE:-0}" = "1" ] || [ ! -t 0 ]; then
-        git diff -U9999 $diff_args > "$outfile"
+        echo "$diff_output" > "$outfile"
         echo "💾 Diff saved to $outfile"
         return 0
     fi
 
     # Try clipboard first
-    local diff_output=$(git diff -U9999 $diff_args)
     if copy_to_clipboard "$diff_output"; then
         echo "📋 Diff copied to clipboard"
         return 0
     else
-        # Fallback to file if clipboard fails
         echo "⚠️  Clipboard not available, saving to file instead..."
         echo "$diff_output" > "$outfile"
         echo "💾 Diff saved to $outfile"
@@ -328,14 +444,17 @@ gexec() {
         return 1
     fi
 
-    local files=$(git diff --name-only --diff-filter=d HEAD)
-    if [ -z "$files" ]; then
+    # Check if there are changes first (to avoid running command on empty input)
+    if git diff --quiet HEAD; then
         echo "ℹ️  No changed files found (Working Tree vs HEAD)."
         return 0
     fi
     
-    echo "🏃 Running command on $(echo "$files" | wc -l | tr -d ' ') file(s)..."
-    echo "$files" | xargs "$@"
+    local file_count=$(git diff --name-only --diff-filter=d HEAD | wc -l | tr -d ' ')
+    echo "🏃 Running command on $file_count file(s)..."
+    
+    # Use -z for null-terminated strings and -0 for xargs to handle spaces safely
+    git diff -z --name-only --diff-filter=d HEAD | xargs -0 "$@"
 }
 
 # GEXEC_MB: Run a command on files changed against merge-base
@@ -372,12 +491,13 @@ gexec_mb() {
         return 1
     fi
     
-    local files=$(git diff --name-only --diff-filter=d "$merge_base" "$target_ref")
-    if [ -z "$files" ]; then
+    local files_check=$(git diff --name-only --diff-filter=d "$merge_base" "$target_ref")
+    if [ -z "$files_check" ]; then
         echo "ℹ️  No changed files found ($base_branch...$target_ref)."
         return 0
     fi
     
-    echo "🏃 Running command on $(echo "$files" | wc -l | tr -d ' ') file(s)..."
-    echo "$files" | xargs "${cmd[@]}"
+    local file_count=$(echo "$files_check" | wc -l | tr -d ' ')
+    echo "🏃 Running command on $file_count file(s)..."
+    git diff -z --name-only --diff-filter=d "$merge_base" "$target_ref" | xargs -0 "${cmd[@]}"
 }

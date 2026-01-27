@@ -1,5 +1,28 @@
 #!/bin/bash
 
+# Defensive sourcing of utils.sh
+# Check if utils.sh functions are available, otherwise try to source it
+if ! command -v copy_to_clipboard >/dev/null 2>&1; then
+    # Try to find utils.sh relative to this script
+    if [ -n "$BASH_SOURCE" ]; then
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    elif [ -n "$ZSH_VERSION" ]; then
+        SCRIPT_DIR="$(cd "$(dirname "${(%):-%x}")" && pwd)"
+    else
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    fi
+
+    if [ -f "$SCRIPT_DIR/utils.sh" ]; then
+        source "$SCRIPT_DIR/utils.sh"
+    else
+        # Fallback if utils.sh is missing to prevent crashes
+        copy_to_clipboard() {
+            echo "⚠️  Clipboard tool missing. Outputting here:"
+            echo "$1"
+        }
+    fi
+fi
+
 # Helper: Check if fzf is installed
 _require_fzf() {
   if ! command_exists fzf; then

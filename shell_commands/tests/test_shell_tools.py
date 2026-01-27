@@ -363,12 +363,15 @@ class TestShellTools(unittest.TestCase):
         subprocess.check_call(["git", "add", "."], cwd=local_path)
         subprocess.check_call(["git", "commit", "-m", "Feature commit"], cwd=local_path)
 
-        # gdmbo main
-        # Should diff against origin/main (which is the parent)
+        # gdmbo (no args)
+        # Should auto-detect base (likely origin/main) and diff against HEAD
         # Output file should be git-feature-test.diff
         # Pass empty input to simulate non-interactive (forces file output)
-        res = self.run_bash("gdmbo main", cwd=local_path, input_text="")
-        self.assertEqual(res.returncode, 0, f"gdmbo failed: {res.stderr}")
+        res = self.run_bash("gdmbo", cwd=local_path, input_text="")
+        self.assertEqual(res.returncode, 0, f"gdmbo failed: {res.stderr}\n{res.stdout}")
+
+        # Note: gdmbo output includes "Detected base: 'origin/main'"
+        self.assertIn("Detected base", res.stdout)
 
         outfile = downloads / "git-feature-test.diff"
         self.assertTrue(outfile.exists())
@@ -388,11 +391,13 @@ class TestShellTools(unittest.TestCase):
         subprocess.check_call(["git", "commit", "-m", "Other commit"], cwd=local_path)
         subprocess.check_call(["git", "checkout", "main"], cwd=local_path)
 
-        # 1. Test with positional args: gdmbo main feature/other
-        # Should diff feature/other against origin/main
+        # 1. Test with positional args: gdmbo feature/other main
+        # (Compare feature/other against base main)
         # Output file should be git-feature-other.diff
-        res = self.run_bash("gdmbo main feature/other", cwd=local_path, input_text="")
-        self.assertEqual(res.returncode, 0, f"gdmbo positional failed: {res.stderr}")
+        res = self.run_bash("gdmbo feature/other main", cwd=local_path, input_text="")
+        self.assertEqual(
+            res.returncode, 0, f"gdmbo positional failed: {res.stderr}\n{res.stdout}"
+        )
 
         outfile = downloads / "git-feature-other.diff"
         self.assertTrue(outfile.exists())
@@ -402,10 +407,12 @@ class TestShellTools(unittest.TestCase):
         # Remove outfile to test next case
         outfile.unlink()
 
-        # 2. Test with flag: gdmbo -t feature/other
-        # Should imply base=main, target=feature/other
-        res = self.run_bash("gdmbo -t feature/other", cwd=local_path, input_text="")
-        self.assertEqual(res.returncode, 0, f"gdmbo flag failed: {res.stderr}")
+        # 2. Test with single arg: gdmbo feature/other
+        # Should auto-detect base for feature/other
+        res = self.run_bash("gdmbo feature/other", cwd=local_path, input_text="")
+        self.assertEqual(
+            res.returncode, 0, f"gdmbo single arg failed: {res.stderr}\n{res.stdout}"
+        )
 
         self.assertTrue(outfile.exists())
         content = outfile.read_text()
