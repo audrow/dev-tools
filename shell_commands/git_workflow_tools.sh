@@ -302,7 +302,7 @@ gdo() {
     fi
 }
 
-# GSKIP: Mark files as skip-worktree (ignore local changes)
+# GSKIP: Mark files as skip-worktree (ignore local changes) OR ignore untracked files locally
 # Usage: gskip [file...]
 # If no files provided, uses fzf to select from tracked files
 gskip() {
@@ -332,30 +332,55 @@ gskip() {
 
     local count=0
     for file in "${files[@]}"; do
-        # Ensure the path is tracked in the git index rather than just existing on disk
+        # 1. Tracked file: Use skip-worktree
         if git ls-files --error-unmatch -- "$file" >/dev/null 2>&1; then
             if git update-index --skip-worktree -- "$file"; then
-                echo "🙈 Skipping: $file"
+                echo "🙈 Skipping (worktree): $file"
                 ((count++))
             else
                 echo "⚠️  Failed to mark as skip-worktree (git update-index error): $file"
             fi
+        
+        # 2. Directory with tracked files: Skip all inside
+        elif [ -d "$file" ] && [ -n "$(git ls-files -- "$file")" ]; then
+             echo "📂 Directory '$file' contains tracked files. Skipping them..."
+             local subfiles=$(git ls-files -- "$file")
+             local subcount=0
+             while IFS= read -r sub; do
+                 if git update-index --skip-worktree -- "$sub"; then
+                     ((subcount++))
+                 fi
+             done <<< "$subfiles"
+             echo "🙈 Skipped $subcount tracked files inside '$file'."
+             ((count++))
+
+        # 3. Untracked file/directory: Ignore locally (.git/info/exclude)
+        elif [ -e "$file" ]; then
+             if git check-ignore -q "$file"; then
+                 echo "ℹ️  $file is already ignored."
+             else
+                 local exclude_file="$(git rev-parse --git-common-dir)/info/exclude"
+                 # Check if already present to avoid duplicates (exact match)
+                 if ! grep -Fxq "$file" "$exclude_file" 2>/dev/null; then
+                     echo "$file" >> "$exclude_file"
+                     echo "🙈 Ignored (added to .git/info/exclude): $file"
+                     ((count++))
+                 else
+                     echo "ℹ️  $file already in .git/info/exclude."
+                 fi
+             fi
         else
-            if [ -e "$file" ]; then
-                echo "⚠️  Path is not tracked by git (cannot set skip-worktree): $file"
-            else
-                echo "⚠️  Path not found in working tree or git index: $file"
-            fi
+             echo "⚠️  Path not found: $file"
         fi
     done
 
     if [ $count -gt 0 ]; then
-        echo "✅ Marked $count file(s) as skip-worktree."
-        echo "💡 Use 'gunskip' to re-enable tracking."
+        echo "✅ Processed $count item(s)."
+        echo "💡 Use 'gunskip' to re-enable tracking or un-ignore."
     fi
 }
 
-# GUNSKIP: Remove skip-worktree flag (re-enable tracking)
+# GUNSKIP: Remove skip-worktree flag (re-enable tracking) or remove from local ignore
 # Usage: gunskip [file...]
 # If no files provided, uses fzf to select from currently skipped files
 gunskip() {
@@ -363,14 +388,13 @@ gunskip() {
     local skipped_files
     skipped_files=$(git ls-files -v | grep '^S ' | cut -c3-)
 
-    if [ -z "$skipped_files" ]; then
-        echo "ℹ️  No files are currently marked as skip-worktree."
-        return 0
-    fi
+    if [ $# -eq 0 ]; then
+        if [ -z "$skipped_files" ]; then
+            echo "ℹ️  No files are currently marked as skip-worktree."
+            # Could list ignored files too, but let's keep it simple for interactive mode
+            return 0
+        fi
 
-    local files=("$@")
-
-    if [ ${#files[@]} -eq 0 ]; then
         if ! command -v fzf &> /dev/null; then
             echo "❌ Error: fzf is not installed. Please install fzf to use interactive selection."
             echo "   Alternatively, provide file paths as arguments: gunskip <file1> [file2] ..."
@@ -391,42 +415,100 @@ gunskip() {
         fi
         
         # Convert newline-separated to array
+        local files=()
         while IFS= read -r file; do
             files+=("$file")
         done <<< "$selected"
+    else
+        local files=("$@")
     fi
 
     local count=0
     for file in "${files[@]}"; do
-        git update-index --no-skip-worktree "$file" 2>/dev/null
-        if [ $? -eq 0 ]; then
-            echo "👁️  Tracking: $file"
-            ((count++))
-        else
-            echo "⚠️  Could not unskip: $file"
+        local handled=false
+
+        # 1. Try unskipping (if tracked)
+        if git ls-files --error-unmatch -- "$file" >/dev/null 2>&1; then
+            git update-index --no-skip-worktree "$file" 2>/dev/null
+            if [ $? -eq 0 ]; then
+                echo "👁️  Tracking (worktree): $file"
+                handled=true
+                ((count++))
+            fi
+        elif [ -d "$file" ] && [ -n "$(git ls-files -- "$file")" ]; then
+             local subfiles=$(git ls-files -- "$file")
+             while IFS= read -r sub; do
+                 git update-index --no-skip-worktree "$sub" 2>/dev/null
+             done <<< "$subfiles"
+             echo "👁️  Re-enabled tracking for files in: $file"
+             handled=true
+             ((count++))
+        fi
+
+        # 2. Try removing from .git/info/exclude
+        local exclude_file="$(git rev-parse --git-common-dir)/info/exclude"
+        if [ -f "$exclude_file" ] && grep -Fxq "$file" "$exclude_file"; then
+             # Remove exact line. grep -v returns 1 if result is empty (all lines removed), so avoid &&
+             grep -Fxv "$file" "$exclude_file" > "$exclude_file.tmp"
+             mv "$exclude_file.tmp" "$exclude_file"
+             echo "👁️  Un-ignored (removed from .git/info/exclude): $file"
+             handled=true
+             ((count++))
+        fi
+
+        if [ "$handled" = false ]; then
+            echo "⚠️  Could not unskip/unignore: $file (not skipped or ignored)"
         fi
     done
 
     if [ $count -gt 0 ]; then
-        echo "✅ Re-enabled tracking for $count file(s)."
+        echo "✅ Processed $count item(s)."
     fi
 }
 
-# GSKIPPED: List all files marked as skip-worktree
+# GSKIPPED: List files marked as skip-worktree or locally ignored
 # Usage: gskipped
 gskipped() {
+    # Check if inside a git repo
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "❌ Not in a git repository."
+        return 1
+    fi
+
+    local found_any=false
+
+    # 1. Skip-worktree files
     local skipped_files
     skipped_files=$(git ls-files -v | grep '^S ' | cut -c3-)
 
-    if [ -z "$skipped_files" ]; then
-        echo "ℹ️  No files are currently marked as skip-worktree."
+    if [ -n "$skipped_files" ]; then
+        echo "🙈 Files with skip-worktree flag:"
+        echo "$skipped_files" | sed 's/^/   /'
+        echo ""
+        found_any=true
+    fi
+
+    # 2. Locally ignored files (.git/info/exclude)
+    local exclude_file="$(git rev-parse --git-common-dir)/info/exclude"
+    if [ -f "$exclude_file" ] && [ -s "$exclude_file" ]; then
+        # Filter out comments and empty lines
+        local ignored_files
+        ignored_files=$(grep -vE '^\s*#|^\s*$' "$exclude_file")
+        
+        if [ -n "$ignored_files" ]; then
+            echo "🙈 Files locally ignored (.git/info/exclude):"
+            echo "$ignored_files" | sed 's/^/   /'
+            echo ""
+            found_any=true
+        fi
+    fi
+
+    if [ "$found_any" = false ]; then
+        echo "ℹ️  No files are currently marked as skip-worktree or locally ignored."
         return 0
     fi
 
-    echo "🙈 Files with skip-worktree flag:"
-    echo "$skipped_files" | sed 's/^/   /'
-    echo ""
-    echo "💡 Use 'gunskip' to re-enable tracking."
+    echo "💡 Use 'gunskip' to re-enable tracking or un-ignore."
 }
 
 # GEXEC: Run a command on files changed in the working tree (vs HEAD)

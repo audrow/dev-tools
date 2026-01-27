@@ -1028,7 +1028,7 @@ class TestSkipWorktree(unittest.TestCase):
 
         res = self.run_bash("gskip settings.json", input_text="")
         self.assertEqual(res.returncode, 0, f"gskip failed: {res.stderr}")
-        self.assertIn("Skipping: settings.json", res.stdout)
+        self.assertIn("Skipping (worktree): settings.json", res.stdout)
 
         # Verify the file is marked as skip-worktree
         result = subprocess.run(
@@ -1040,13 +1040,26 @@ class TestSkipWorktree(unittest.TestCase):
         # 'S' prefix indicates skip-worktree
         self.assertIn("S settings.json", result.stdout)
 
-    def test_gskip_untracked_file(self):
-        """Test that gskip fails gracefully for untracked files."""
+    def test_gskip_and_gunskip_untracked_file(self):
+        """Test that gskip ignores and gunskip un-ignores untracked files."""
         self.setup_repo()
         Path(self.test_dir, "untracked.txt").write_text("not tracked")
 
+        # 1. Skip (Ignore)
         res = self.run_bash("gskip untracked.txt", input_text="")
-        self.assertIn("not tracked by git", res.stdout)
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("Ignored (added to .git/info/exclude)", res.stdout)
+        
+        exclude_file = Path(self.test_dir) / ".git" / "info" / "exclude"
+        self.assertTrue(exclude_file.exists())
+        self.assertIn("untracked.txt", exclude_file.read_text())
+
+        # 2. Unskip (Un-ignore)
+        res = self.run_bash("gunskip untracked.txt", input_text="")
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("Un-ignored (removed from .git/info/exclude)", res.stdout)
+        
+        self.assertNotIn("untracked.txt", exclude_file.read_text())
 
     def test_gskip_nonexistent_file(self):
         """Test that gskip fails gracefully for non-existent files."""
@@ -1068,7 +1081,7 @@ class TestSkipWorktree(unittest.TestCase):
         # Then unskip it
         res = self.run_bash("gunskip settings.json", input_text="")
         self.assertEqual(res.returncode, 0, f"gunskip failed: {res.stderr}")
-        self.assertIn("Tracking: settings.json", res.stdout)
+        self.assertIn("Tracking (worktree): settings.json", res.stdout)
 
         # Verify the file is no longer skip-worktree
         result = subprocess.run(
@@ -1100,7 +1113,23 @@ class TestSkipWorktree(unittest.TestCase):
 
         res = self.run_bash("gskipped", input_text="")
         self.assertEqual(res.returncode, 0, f"gskipped failed: {res.stderr}")
-        self.assertIn("No files are currently marked", res.stdout)
+        self.assertIn("No files are currently marked as skip-worktree or locally ignored", res.stdout)
+
+    def test_gskipped_lists_ignored_files(self):
+        """Test that gskipped lists files in .git/info/exclude."""
+        self.setup_repo()
+        
+        # Add file to exclude
+        exclude_file = Path(self.test_dir) / ".git" / "info" / "exclude"
+        # Ensure dir exists (it should)
+        exclude_file.parent.mkdir(parents=True, exist_ok=True)
+        exclude_file.write_text("ignored.txt\n# comment")
+
+        res = self.run_bash("gskipped", input_text="")
+        self.assertEqual(res.returncode, 0, f"gskipped failed: {res.stderr}")
+        self.assertIn("Files locally ignored", res.stdout)
+        self.assertIn("ignored.txt", res.stdout)
+        self.assertNotIn("# comment", res.stdout)
 
     def test_gskip_multiple_files(self):
         """Test that gskip can mark multiple files at once."""
@@ -1108,7 +1137,7 @@ class TestSkipWorktree(unittest.TestCase):
 
         res = self.run_bash("gskip settings.json README.md", input_text="")
         self.assertEqual(res.returncode, 0, f"gskip failed: {res.stderr}")
-        self.assertIn("Marked 2 file(s)", res.stdout)
+        self.assertIn("Processed 2 item(s)", res.stdout)
 
 
 if __name__ == "__main__":

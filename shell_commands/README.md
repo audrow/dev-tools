@@ -239,38 +239,42 @@ Advanced workflow automation.
 | Command | Usage | Description |
 | :--- | :--- | :--- |
 | `gupdate` | `gupdate [base]` | Updates your branch: **Fetch** -> **Merge** `origin/[base]` -> **Push** to `origin`. |
-| `gmb` | `gmb [base] [target]` | Finds the merge-base between `origin/[base]` and `HEAD` (or `target` ref). Automatically falls back to `master` if `main` is missing. |
+| `gmb` | `gmb [base] [target]` | Finds the merge-base between `origin/[base]` and `HEAD` (or `target` ref). **Auto-detects base** (main/master/develop) if omitted. |
 | `gdiff_out` | `gdiff_out [args]` | Runs `git diff [args]` and saves the output to `~/Downloads/git-<branch>.diff`. Useful for copying diffs over SSH. |
-| `gdmbo` | `gdmbo [base] [target]` | Diffs from merge-base of `origin/[base]`. Use `[base] [target]` or `-t [target]` to diff a specific branch against base. **Copies to clipboard** by default, falls back to file. |
-| `gexec` | `gexec <cmd> [args]` | Runs a command on files changed in the working tree (vs HEAD). Example: `gexec prettier --write` |
+| `gdmbo` | `gdmbo [target] [base]` | Diffs `[target]` (default HEAD) against the merge-base of `[base]` (default auto-detected). **Full context (-U9999)**. Copies to clipboard. |
+| `gdo` | `gdo [args...]` | Wrapper for `git diff` with **full context (-U9999)**. Copies to clipboard. |
+| `gexec` | `gexec <cmd> [args]` | Runs a command on files changed in the working tree (vs HEAD). Handles spaces in filenames safely. |
 | `gexec_mb` | `gexec_mb [base] <cmd>` | Runs a command on files changed between merge-base (default `origin/main`) and HEAD. Supports `-t <target>`. |
-| `gskip` | `gskip [file...]` | Mark files as skip-worktree (ignore local changes). Uses fzf for interactive selection if no files provided. |
-| `gunskip` | `gunskip [file...]` | Remove skip-worktree flag (re-enable tracking). Uses fzf to select from skipped files if no arguments. |
-| `gskipped` | `gskipped` | List all files currently marked as skip-worktree. |
+| `gskip` | `gskip [file...]` | Mark files as skip-worktree. **Also ignores untracked files** locally (`.git/info/exclude`). Interactive (fzf). |
+| `gunskip` | `gunskip [file...]` | Re-enable tracking. **Also un-ignores files** locally. Interactive (fzf). |
+| `gskipped` | `gskipped` | List all files currently marked as skip-worktree or **locally ignored**. |
 
 **Environment Variables:**
 - `GDIFF_DIR` (optional): Directory for diff output files (default: `~/Downloads`)
-- `GDMBO_FORCE_FILE` (optional): Set to `1` to force `gdmbo` to always write to file instead of clipboard
+- `GDMBO_FORCE_FILE` / `GDO_FORCE_FILE` (optional): Set to `1` to force output to file instead of clipboard.
 
-#### Skip-Worktree Commands
+#### Skip-Worktree & Local Ignore Commands
 
-The `gskip` family of commands helps you ignore local changes to tracked files without adding them to `.gitignore`. This is useful for:
+The `gskip` family of commands helps you ignore local changes to tracked files (using `skip-worktree`) AND ignore untracked files locally (using `.git/info/exclude`) without modifying the shared `.gitignore`.
+
+This is useful for:
 - Configuration files with local overrides (e.g., `settings.json`)
 - Files with machine-specific paths
 - Temporary local modifications you don't want to commit
+- **Untracked files** you want to hide from `git status` locally
 
 **Usage:**
 ```bash
-# Mark a file as skip-worktree (interactive with fzf)
+# Interactive selection (uses fzf)
 gskip
 
-# Mark specific files
-gskip settings.json .env.local
+# Mark specific files (tracked or untracked)
+gskip settings.json local-script.sh
 
-# List all skipped files
+# List all skipped and locally ignored files
 gskipped
 
-# Re-enable tracking (interactive with fzf)
+# Re-enable tracking or un-ignore (interactive)
 gunskip
 
 # Re-enable tracking for specific files
