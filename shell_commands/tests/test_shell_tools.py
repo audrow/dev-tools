@@ -1049,7 +1049,7 @@ class TestSkipWorktree(unittest.TestCase):
         res = self.run_bash("gskip untracked.txt", input_text="")
         self.assertEqual(res.returncode, 0)
         self.assertIn("Ignored (added to .git/info/exclude)", res.stdout)
-        
+
         exclude_file = Path(self.test_dir) / ".git" / "info" / "exclude"
         self.assertTrue(exclude_file.exists())
         self.assertIn("untracked.txt", exclude_file.read_text())
@@ -1058,7 +1058,7 @@ class TestSkipWorktree(unittest.TestCase):
         res = self.run_bash("gunskip untracked.txt", input_text="")
         self.assertEqual(res.returncode, 0)
         self.assertIn("Un-ignored (removed from .git/info/exclude)", res.stdout)
-        
+
         self.assertNotIn("untracked.txt", exclude_file.read_text())
 
     def test_gskip_nonexistent_file(self):
@@ -1113,12 +1113,15 @@ class TestSkipWorktree(unittest.TestCase):
 
         res = self.run_bash("gskipped", input_text="")
         self.assertEqual(res.returncode, 0, f"gskipped failed: {res.stderr}")
-        self.assertIn("No files are currently marked as skip-worktree or locally ignored", res.stdout)
+        self.assertIn(
+            "No files are currently marked as skip-worktree or locally ignored",
+            res.stdout,
+        )
 
     def test_gskipped_lists_ignored_files(self):
         """Test that gskipped lists files in .git/info/exclude."""
         self.setup_repo()
-        
+
         # Add file to exclude
         exclude_file = Path(self.test_dir) / ".git" / "info" / "exclude"
         # Ensure dir exists (it should)
