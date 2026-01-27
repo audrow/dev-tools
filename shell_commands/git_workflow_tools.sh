@@ -132,13 +132,13 @@ gdmbo() {
 
     # Check if user wants to force file output or stdin is not interactive
     if [ "${GDMBO_FORCE_FILE:-0}" = "1" ] || [ ! -t 0 ]; then
-        git diff "$base" "$target_ref" > "$outfile"
+        git diff -U9999 "$base" "$target_ref" > "$outfile"
         echo "💾 Diff saved to $outfile"
         return 0
     fi
 
     # Try clipboard first
-    local diff_output=$(git diff "$base" "$target_ref")
+    local diff_output=$(git diff -U9999 "$base" "$target_ref")
     if copy_to_clipboard "$diff_output"; then
         echo "📋 Diff copied to clipboard"
         return 0
@@ -167,13 +167,13 @@ gdo() {
 
     # Check if user wants to force file output or stdin is not interactive
     if [ "${GDO_FORCE_FILE:-0}" = "1" ] || [ ! -t 0 ]; then
-        git diff $diff_args > "$outfile"
+        git diff -U9999 $diff_args > "$outfile"
         echo "💾 Diff saved to $outfile"
         return 0
     fi
 
     # Try clipboard first
-    local diff_output=$(git diff $diff_args)
+    local diff_output=$(git diff -U9999 $diff_args)
     if copy_to_clipboard "$diff_output"; then
         echo "📋 Diff copied to clipboard"
         return 0
