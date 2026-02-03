@@ -5,6 +5,7 @@ import sys
 import json
 import pyperclip
 import argparse
+import pathspec
 from typing import List, Optional, Tuple, Dict, Any
 
 CONFIG_FILENAME = ".text_aggregator.json"
@@ -72,11 +73,54 @@ def _generate_tree_structure(paths: List[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _load_gitignore_spec(start_path: str) -> Optional[pathspec.PathSpec]:
+    """
+    Loads .gitignore patterns from the directory containing start_path or its parents.
+    Returns a PathSpec object for matching, or None if no .gitignore found.
+    """
+    # Find the directory to start searching from
+    if os.path.isfile(start_path):
+        search_dir = os.path.dirname(os.path.abspath(start_path))
+    else:
+        search_dir = os.path.abspath(start_path)
+
+    # Look for .gitignore in current directory and parent directories
+    patterns = []
+    current_dir = search_dir if search_dir else os.getcwd()
+
+    # Walk up to find .gitignore files (child .gitignore patterns take precedence)
+    gitignore_files = []
+    while True:
+        gitignore_path = os.path.join(current_dir, ".gitignore")
+        if os.path.exists(gitignore_path):
+            gitignore_files.append(gitignore_path)
+
+        parent_dir = os.path.dirname(current_dir)
+        if parent_dir == current_dir:  # Reached root
+            break
+        current_dir = parent_dir
+
+    # Read patterns from all found .gitignore files (parent first, then child)
+    for gitignore_path in reversed(gitignore_files):
+        try:
+            with open(gitignore_path, "r", encoding="utf-8") as f:
+                patterns.extend(f.readlines())
+        except Exception:
+            pass
+
+    if not patterns:
+        return None
+
+    return pathspec.PathSpec.from_lines("gitignore", patterns)
+
+
 def aggregate_text(
     path_patterns: List[str],
     include_extensions: Optional[List[str]] = None,
     exclude_extensions: Optional[List[str]] = None,
     exclude_directories: Optional[List[str]] = None,
+    exclude_files: Optional[List[str]] = None,
+    respect_gitignore: bool = True,
     output_file: Optional[str] = None,
     no_copy: bool = False,
 ) -> Tuple[Optional[str], List[str]]:
@@ -89,6 +133,9 @@ def aggregate_text(
         exclude_extensions: A list of file extensions to exclude (e.g., ["log"]).
         exclude_directories: A list of directory names to exclude (e.g., ["node_modules"]).
                              Defaults to package/global config if None.
+        exclude_files: A list of file names to exclude (e.g., ["package-lock.json"]).
+                       Defaults to package/global config if None.
+        respect_gitignore: If True, files matching .gitignore patterns will be excluded.
         output_file: The path to a file to write the aggregated text to. If None, the text is copied to the clipboard.
         no_copy: If True, the aggregated text will not be copied to the clipboard.
 
@@ -101,9 +148,11 @@ def aggregate_text(
         pyperclip.PyperclipException: If clipboard copy is requested but fails.
     """
     # Load defaults if not provided
+    config = load_config()
     if exclude_directories is None:
-        config = load_config()
         exclude_directories = config.get("exclude_directories", [])
+    if exclude_files is None:
+        exclude_files = config.get("exclude_files", [])
 
     # Normalize extensions
     include_extensions = _normalize_extensions(include_extensions)
@@ -117,6 +166,11 @@ def aggregate_text(
     files = sorted(list(set(all_files)))
     processed_files = []
 
+    # Load gitignore spec if enabled
+    gitignore_spec = None
+    if respect_gitignore:
+        gitignore_spec = _load_gitignore_spec(os.getcwd())
+
     # First pass: identify valid files to build structure
     valid_files = []
     for file in files:
@@ -128,6 +182,12 @@ def aggregate_text(
             continue
         path_parts = os.path.normpath(file).split(os.sep)
         if any(part in exclude_directories for part in path_parts):
+            continue
+        # Check if the file basename matches any excluded file names
+        if exclude_files and os.path.basename(file) in exclude_files:
+            continue
+        # Check against .gitignore patterns
+        if gitignore_spec and gitignore_spec.match_file(file):
             continue
         if os.path.isdir(file):
             continue
@@ -194,6 +254,17 @@ def main():
         help="A list of directory names to exclude. Defaults to package/global config.",
     )
     parser.add_argument(
+        "-f",
+        "--exclude-files",
+        nargs="*",
+        help="A list of file names to exclude. Defaults to package/global config.",
+    )
+    parser.add_argument(
+        "--no-gitignore",
+        action="store_true",
+        help="Do not respect .gitignore patterns when excluding files.",
+    )
+    parser.add_argument(
         "-o",
         "--output-file",
         type=str,
@@ -228,6 +299,16 @@ def main():
     if exclude_directories is None:
         exclude_directories = config.get("exclude_directories")
 
+    exclude_files = args.exclude_files
+    if exclude_files is None:
+        exclude_files = config.get("exclude_files")
+
+    # Determine respect_gitignore: CLI --no-gitignore overrides config
+    if args.no_gitignore:
+        respect_gitignore = False
+    else:
+        respect_gitignore = config.get("respect_gitignore", True)
+
     include_extensions = _parse_exts(args.include_extensions)
     if include_extensions is None:
         include_extensions = config.get("include_extensions")
@@ -258,6 +339,8 @@ def main():
             include_extensions=include_extensions,
             exclude_extensions=exclude_extensions,
             exclude_directories=exclude_directories,
+            exclude_files=exclude_files,
+            respect_gitignore=respect_gitignore,
             output_file=output_file,
             no_copy=no_copy,
         )

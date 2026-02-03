@@ -1,8 +1,10 @@
 {
   "_comments": {
     "exclude_directories": "List of directory names to skip entirely (recursive).",
+    "exclude_files": "List of file names to exclude (e.g. ['package-lock.json', 'yarn.lock']).",
     "include_extensions": "List of file extensions to include (e.g. ['py', 'md']). Leading dots are optional.",
     "exclude_extensions": "List of file extensions to ignore.",
+    "respect_gitignore": "If true, files matching patterns in .gitignore will be excluded.",
     "output_file": "Default path to write aggregated text. Set to null to use clipboard.",
     "no_copy": "If true, disables clipboard copying by default.",
     "stdout": "If true, prints aggregated text to the terminal by default."
@@ -23,7 +25,27 @@
     "bazel-testlogs",
     "bazel-genfiles"
   ],
-  "include_extensions": [],
+  "exclude_files": [
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "poetry.lock",
+    "Pipfile.lock",
+    "Gemfile.lock",
+    "composer.lock",
+    "Cargo.lock",
+    "go.sum",
+    "shrinkwrap.yaml",
+    "npm-shrinkwrap.json",
+    "flake.lock",
+    "Podfile.lock",
+    "Packages.resolved",
+    "pubspec.lock",
+    "mix.lock",
+    "gradle.lockfile",
+    ".terraform.lock.hcl"
+  ],
+  "respect_gitignore": true,
   "exclude_extensions": [
     ".jpg",
     ".jpeg",

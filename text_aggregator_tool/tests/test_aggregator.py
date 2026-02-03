@@ -110,6 +110,103 @@ class TestAggregator(unittest.TestCase):
             args, kwargs = mock_agg.call_args
             self.assertEqual(kwargs["include_extensions"], ["py", "txt"])
 
+    def test_exclude_files(self):
+        """Test that specific files can be excluded by name."""
+        self.create_test_file("package-lock.json", '{"lockfileVersion": 1}')
+        self.create_test_file("package.json", '{"name": "test"}')
+
+        aggregated_text, files = aggregate_text(
+            ["**/*.json"],
+            exclude_files=["package-lock.json"],
+            respect_gitignore=False,
+            no_copy=True,
+        )
+
+        # package.json should be included, package-lock.json should not
+        file_basenames = [os.path.basename(f) for f in files]
+        self.assertIn("package.json", file_basenames)
+        self.assertNotIn("package-lock.json", file_basenames)
+
+    def test_exclude_files_multiple(self):
+        """Test that multiple files can be excluded."""
+        self.create_test_file("yarn.lock", "# yarn lockfile")
+        self.create_test_file("poetry.lock", "[[package]]")
+        self.create_test_file("README.md", "# Readme")
+
+        aggregated_text, files = aggregate_text(
+            ["**/*"],
+            exclude_files=["yarn.lock", "poetry.lock"],
+            respect_gitignore=False,
+            no_copy=True,
+        )
+
+        file_basenames = [os.path.basename(f) for f in files]
+        self.assertNotIn("yarn.lock", file_basenames)
+        self.assertNotIn("poetry.lock", file_basenames)
+        self.assertIn("README.md", file_basenames)
+
+    def test_respect_gitignore(self):
+        """Test that .gitignore patterns are respected."""
+        # Create a .gitignore file
+        self.create_test_file(".gitignore", "*.log\nbuild/\n")
+        self.create_test_file("app.py", "print('hello')")
+        self.create_test_file("debug.log", "log content")
+        os.makedirs(os.path.join(self.test_dir, "build"), exist_ok=True)
+        self.create_test_file("build/output.js", "compiled")
+
+        aggregated_text, files = aggregate_text(
+            ["**/*"],
+            exclude_directories=[],
+            exclude_files=[],
+            respect_gitignore=True,
+            no_copy=True,
+        )
+
+        file_basenames = [os.path.basename(f) for f in files]
+        self.assertIn("app.py", file_basenames)
+        self.assertNotIn("debug.log", file_basenames)
+        self.assertNotIn("output.js", file_basenames)
+
+    def test_respect_gitignore_disabled(self):
+        """Test that .gitignore can be disabled."""
+        self.create_test_file(".gitignore", "*.log\n")
+        self.create_test_file("debug.log", "log content")
+        self.create_test_file("app.py", "print('hello')")
+
+        aggregated_text, files = aggregate_text(
+            ["**/*"],
+            exclude_directories=[],
+            exclude_files=[],
+            respect_gitignore=False,
+            no_copy=True,
+        )
+
+        file_basenames = [os.path.basename(f) for f in files]
+        self.assertIn("debug.log", file_basenames)
+        self.assertIn("app.py", file_basenames)
+
+    def test_main_no_gitignore_flag(self):
+        """Test that --no-gitignore flag is passed correctly."""
+        with patch(
+            "sys.argv", ["text-aggregator", "--no-gitignore", "--no-copy"]
+        ), patch(
+            "text_aggregator.aggregator.aggregate_text", return_value=("", [])
+        ) as mock_agg:
+            main()
+            args, kwargs = mock_agg.call_args
+            self.assertFalse(kwargs["respect_gitignore"])
+
+    def test_main_exclude_files_flag(self):
+        """Test that -f/--exclude-files flag is passed correctly."""
+        with patch(
+            "sys.argv", ["text-aggregator", "-f", "lock.json", "yarn.lock", "--no-copy"]
+        ), patch(
+            "text_aggregator.aggregator.aggregate_text", return_value=("", [])
+        ) as mock_agg:
+            main()
+            args, kwargs = mock_agg.call_args
+            self.assertEqual(kwargs["exclude_files"], ["lock.json", "yarn.lock"])
+
 
 if __name__ == "__main__":
     unittest.main()
