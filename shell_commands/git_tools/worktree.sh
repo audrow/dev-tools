@@ -1,36 +1,18 @@
 #!/bin/bash
 
 # Defensive sourcing of utils.sh
-# Check if utils.sh functions are available, otherwise try to source it
 if ! command -v copy_to_clipboard >/dev/null 2>&1; then
-    # Try to find utils.sh relative to this script
     if [ -n "$BASH_SOURCE" ]; then
-        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        _DEFENSIVE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     elif [ -n "$ZSH_VERSION" ]; then
-        SCRIPT_DIR="$(cd "$(dirname "${(%):-%x}")" && pwd)"
+        _DEFENSIVE_DIR="$(cd "$(dirname "${(%):-%x}")" && pwd)"
     else
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        _DEFENSIVE_DIR="$(cd "$(dirname "$0")" && pwd)"
     fi
-
-    if [ -f "$SCRIPT_DIR/utils.sh" ]; then
-        source "$SCRIPT_DIR/utils.sh"
-    else
-        # Fallback if utils.sh is missing to prevent crashes
-        copy_to_clipboard() {
-            echo "⚠️  Clipboard tool missing. Outputting here:"
-            echo "$1"
-        }
+    if [ -f "$_DEFENSIVE_DIR/../utils.sh" ]; then
+        source "$_DEFENSIVE_DIR/../utils.sh"
     fi
 fi
-
-# Helper: Check if fzf is installed
-_require_fzf() {
-  if ! command_exists fzf; then
-    echo "❌ Error: fzf is not installed. Please install fzf to use this command."
-    return 1
-  fi
-  return 0
-}
 
 # Helper: Check if USER_IDE is set
 _require_user_ide() {
@@ -40,46 +22,6 @@ _require_user_ide() {
     return 1
   fi
   return 0
-}
-
-# Helper: Prompt for yes/no with default
-# Usage: _prompt_yn "Question?" "Y" (for default yes) or "N" (for default no)
-# Returns 0 for yes, 1 for no
-_prompt_yn() {
-  local question="$1"
-  local default="${2:-N}"  # Default to N if not specified
-  local prompt_suffix
-  
-  if [[ "$default" =~ ^[Yy]$ ]]; then
-    prompt_suffix="[Y/n]"
-  else
-    prompt_suffix="[y/N]"
-  fi
-  
-  # Print prompt to stderr to avoid polluting stdout
-  echo -n "$question $prompt_suffix " >&2
-  if [ "${PROMPT_ASSUME_YES:-0}" = "1" ]; then
-    return 0
-  fi
-
-  if ! read -r response; then
-    response=""
-  fi
-  
-  # If empty, use default for TTYs, or default to "No" for non-interactive
-  if [ -z "$response" ]; then
-    if [ -t 0 ]; then
-      response="$default"
-    else
-      response="N"
-    fi
-  fi
-  
-  if [[ "$response" =~ ^[Yy]$ ]]; then
-    return 0
-  else
-    return 1
-  fi
 }
 
 # Helper: Select a worktree using fzf
