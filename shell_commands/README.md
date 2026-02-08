@@ -35,7 +35,7 @@ source ~/.zshrc
 
 ## Available Tools
 
-### Git Aliases (`git_aliases.sh`)
+### Git Aliases (`git_tools/aliases.sh`)
 
 Commonly used git commands shortened for speed.
 
@@ -58,7 +58,7 @@ Commonly used git commands shortened for speed.
 | `gpl` | `git pull` | Fetch from and integrate with another repository. |
 | `gp` | `git push` | Update remote refs along with associated objects. |
 
-### Git Worktree Tools (`git_worktree_tools.sh`)
+### Git Worktree Tools (`git_tools/worktree.sh`)
 
 Helpers for managing `git worktree` workflows. Uses `fzf` for fuzzy searching.
 
@@ -232,13 +232,13 @@ $ wto
 🚀 Opening /Users/you/.worktrees/repo/my-feature in code...
 ```
 
-### Git Workflow Tools (`git_workflow_tools.sh`)
+### Git Workflow Tools (`git_tools/*.sh`)
 
-Advanced workflow automation.
+Advanced workflow automation split into specialized modules: `sync.sh`, `diff.sh`, `index.sh`, `exec.sh`.
 
 | Command | Usage | Description |
 | :--- | :--- | :--- |
-| `gupdate` | `gupdate [base]` | Updates your branch: **Fetch** -> **Merge** `origin/[base]` -> **Push** to `origin`. |
+| `gupdate` | `gupdate [base]` | Updates your branch: Temporarily unskips/stashes changes -> **Fetch** -> **Merge** `origin/[base]` -> **Push** -> Restore stash/reskip. |
 | `gmb` | `gmb [base] [target]` | Finds the merge-base between `origin/[base]` and `HEAD` (or `target` ref). **Auto-detects base** (main/master/develop) if omitted. |
 | `gdiff_out` | `gdiff_out [args]` | Runs `git diff [args]` and saves the output to `~/Downloads/git-<branch>.diff`. Useful for copying diffs over SSH. |
 | `gdmbo` | `gdmbo [target] [base]` | Diffs `[target]` (default HEAD) against the merge-base of `[base]` (default auto-detected). **Full context (-U9999)**. Copies to clipboard. |
@@ -247,7 +247,7 @@ Advanced workflow automation.
 | `gexec_mb` | `gexec_mb [base] <cmd>` | Runs a command on files changed between merge-base (default `origin/main`) and HEAD. Supports `-t <target>`. |
 | `gskip` | `gskip [file...]` | Mark files as skip-worktree. **Also ignores untracked files** locally (`.git/info/exclude`). Interactive (fzf). |
 | `gunskip` | `gunskip [file...]` | Re-enable tracking. **Also un-ignores files** locally. Interactive (fzf). |
-| `gskipped` | `gskipped` | List all files currently marked as skip-worktree or **locally ignored**. |
+| `gskipped` | `gskipped [--list] [--worktree] [--ignored]` | List files marked as skip-worktree or **locally ignored**. Flags allow filtering and machine-readable output. |
 
 **Environment Variables:**
 - `GDIFF_DIR` (optional): Directory for diff output files (default: `~/Downloads`)
@@ -274,6 +274,9 @@ gskip settings.json local-script.sh
 # List all skipped and locally ignored files
 gskipped
 
+# Machine-readable list of skipped worktree files
+gskipped --list --worktree
+
 # Re-enable tracking or un-ignore (interactive)
 gunskip
 
@@ -295,11 +298,16 @@ Convenient wrappers for the Python tools in this repository. These allow you to 
 
 ## How it Works
 
-- `init.sh`: The entry point. It detects its own location and sources the other `.sh` files in the directory. Handles zsh compatibility by wrapping bash-specific functions.
-- `utils.sh`: Shared utility functions (clipboard, worktree helpers).
-- `git_aliases.sh`: Basic function-based aliases.
-- `git_worktree_tools.sh`: Logic for worktree management, including path sanitization and tracking fixes.
-- `git_workflow_tools.sh`: Multi-step git procedures.
+- `init.sh`: The entry point. It detects its own location and sources `utils.sh`, `python_tools.sh`, and all scripts in `git_tools/`.
+- `utils.sh`: Shared utility functions.
+- `git_tools/`: Directory containing specialized shell scripts:
+    - `aliases.sh`: Basic function-based aliases.
+    - `worktree.sh`: Worktree management tools.
+    - `sync.sh`: Synchronization tools (`gupdate`, `gmb`).
+    - `diff.sh`: Diffing tools (`gdmbo`, `gdo`, `gdiff_out`).
+    - `index.sh`: Index/Skipping tools (`gskip`, `gunskip`, `gskipped`).
+    - `exec.sh`: Execution tools (`gexec`, `gexec_mb`).
+
 
 ### Utility Functions (`utils.sh`)
 

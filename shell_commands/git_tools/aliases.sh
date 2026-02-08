@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# Defensive sourcing of utils.sh
+if ! command -v copy_to_clipboard >/dev/null 2>&1; then
+    if [ -n "$BASH_SOURCE" ]; then
+        _DEFENSIVE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    elif [ -n "$ZSH_VERSION" ]; then
+        _DEFENSIVE_DIR="$(cd "$(dirname "${(%):-%x}")" && pwd)"
+    else
+        _DEFENSIVE_DIR="$(cd "$(dirname "$0")" && pwd)"
+    fi
+    if [ -f "$_DEFENSIVE_DIR/../utils.sh" ]; then
+        source "$_DEFENSIVE_DIR/../utils.sh"
+    fi
+fi
+
 # Git log (simple)
 # Usage: glog [options]
 function glog() {
@@ -66,6 +80,13 @@ function gdstaged() {
 function gdmb() {
     local base_branch="${1:-main}"
     local target_ref="${2:-HEAD}"
+    
+    # Defensive check for gmb
+    if ! command -v gmb >/dev/null 2>&1; then
+        echo "❌ 'gmb' command not found. Is sync.sh sourced?"
+        return 1
+    fi
+
     local merge_base=$(gmb "$base_branch" "$target_ref")
     
     if [ -n "$merge_base" ]; then
@@ -81,6 +102,13 @@ function gdmb() {
 function gdmbs() {
     local base_branch="${1:-main}"
     local target_ref="${2:-HEAD}"
+    
+    # Defensive check for gmb
+    if ! command -v gmb >/dev/null 2>&1; then
+        echo "❌ 'gmb' command not found. Is sync.sh sourced?"
+        return 1
+    fi
+
     local merge_base=$(gmb "$base_branch" "$target_ref")
 
     if [ -n "$merge_base" ]; then

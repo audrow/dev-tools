@@ -17,9 +17,14 @@ SCRIPT_DIR=$(get_script_dir)
 # If running in bash, source scripts directly
 if [ -n "$BASH_VERSION" ]; then
     [ -f "$SCRIPT_DIR/utils.sh" ] && source "$SCRIPT_DIR/utils.sh"
-    [ -f "$SCRIPT_DIR/git_aliases.sh" ] && source "$SCRIPT_DIR/git_aliases.sh"
-    [ -f "$SCRIPT_DIR/git_worktree_tools.sh" ] && source "$SCRIPT_DIR/git_worktree_tools.sh"
-    [ -f "$SCRIPT_DIR/git_workflow_tools.sh" ] && source "$SCRIPT_DIR/git_workflow_tools.sh"
+    
+    # Source all git tools
+    if [ -d "$SCRIPT_DIR/git_tools" ]; then
+        for f in "$SCRIPT_DIR/git_tools"/*.sh; do
+            [ -f "$f" ] && source "$f"
+        done
+    fi
+    
     [ -f "$SCRIPT_DIR/python_tools.sh" ] && source "$SCRIPT_DIR/python_tools.sh"
 else
     # Running in zsh or other shell - create wrapper functions that run in bash
@@ -34,9 +39,11 @@ else
         local output
         output=$(bash -c "
             source '$SCRIPT_DIR/utils.sh' 2>/dev/null
-            source '$SCRIPT_DIR/git_aliases.sh' 2>/dev/null
-            source '$SCRIPT_DIR/git_worktree_tools.sh' 2>/dev/null
-            source '$SCRIPT_DIR/git_workflow_tools.sh' 2>/dev/null
+            if [ -d '$SCRIPT_DIR/git_tools' ]; then
+                for f in '$SCRIPT_DIR/git_tools'/*.sh; do
+                    [ -f \"\$f\" ] && source \"\$f\"
+                done
+            fi
             source '$SCRIPT_DIR/python_tools.sh' 2>/dev/null
             $func_name \"\$@\"
         " -- "$@" 2>&1)
@@ -68,9 +75,11 @@ else
         if [ -t 0 ]; then
             bash -c "
             source '$SCRIPT_DIR/utils.sh' 2>/dev/null
-            source '$SCRIPT_DIR/git_aliases.sh' 2>/dev/null
-            source '$SCRIPT_DIR/git_worktree_tools.sh' 2>/dev/null
-            source '$SCRIPT_DIR/git_workflow_tools.sh' 2>/dev/null
+            if [ -d '$SCRIPT_DIR/git_tools' ]; then
+                for f in '$SCRIPT_DIR/git_tools'/*.sh; do
+                    [ -f \"\$f\" ] && source \"\$f\"
+                done
+            fi
             source '$SCRIPT_DIR/python_tools.sh' 2>/dev/null
             
             # Redirect __BASH_CD__ marker to temp file
@@ -93,9 +102,11 @@ else
         else
             bash -c "
             source '$SCRIPT_DIR/utils.sh' 2>/dev/null
-            source '$SCRIPT_DIR/git_aliases.sh' 2>/dev/null
-            source '$SCRIPT_DIR/git_worktree_tools.sh' 2>/dev/null
-            source '$SCRIPT_DIR/git_workflow_tools.sh' 2>/dev/null
+            if [ -d '$SCRIPT_DIR/git_tools' ]; then
+                for f in '$SCRIPT_DIR/git_tools'/*.sh; do
+                    [ -f \"\$f\" ] && source \"\$f\"
+                done
+            fi
             source '$SCRIPT_DIR/python_tools.sh' 2>/dev/null
             
             # Redirect __BASH_CD__ marker to temp file
@@ -149,10 +160,16 @@ else
     gskip() { _run_bash_func_interactive gskip "$@"; }
     gunskip() { _run_bash_func_interactive gunskip "$@"; }
     gskipped() { _run_bash_func gskipped "$@"; }
+    gdo() { _run_bash_func gdo "$@"; }
+    gexec() { _run_bash_func_interactive gexec "$@"; }
+    gexec_mb() { _run_bash_func_interactive gexec_mb "$@"; }
     
-    # Source git_aliases.sh directly - it only defines simple aliases that work in zsh
-    [ -f "$SCRIPT_DIR/git_aliases.sh" ] && source "$SCRIPT_DIR/git_aliases.sh"
+    # Source aliases directly - it only defines simple aliases that work in zsh
+    [ -f "$SCRIPT_DIR/git_tools/aliases.sh" ] && source "$SCRIPT_DIR/git_tools/aliases.sh"
     
     # Source python_tools.sh directly if it's zsh-compatible
     [ -f "$SCRIPT_DIR/python_tools.sh" ] && source "$SCRIPT_DIR/python_tools.sh"
 fi
+
+# Explicitly return true to ensure source init.sh doesn't fail if the last command failed
+true
