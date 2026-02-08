@@ -124,30 +124,34 @@ detect_base_branch() {
     local best_timestamp=0
 
     for candidate in "${candidates[@]}"; do
-        # Check if candidate exists locally or remotely (try local first, then origin/)
-        local candidate_ref="$candidate"
-        if ! git rev-parse --verify "$candidate_ref" >/dev/null 2>&1; then
-             candidate_ref="origin/$candidate"
-             if ! git rev-parse --verify "$candidate_ref" >/dev/null 2>&1; then
-                 continue
-             fi
+        # Check both local "$candidate" and "origin/$candidate"
+        local refs_to_check=()
+        
+        if git rev-parse --verify "$candidate" >/dev/null 2>&1; then
+            refs_to_check+=("$candidate")
+        fi
+        
+        if git rev-parse --verify "origin/$candidate" >/dev/null 2>&1; then
+            refs_to_check+=("origin/$candidate")
         fi
 
-        # Find the common ancestor (merge-base)
-        local mb
-        mb=$(git merge-base "$candidate_ref" "$target_branch" 2>/dev/null)
-        
-        if [ -n "$mb" ]; then
-            # Get the commit time of the merge-base (Unix timestamp)
-            local ts
-            ts=$(git show -s --format=%ct "$mb")
+        for ref in "${refs_to_check[@]}"; do
+            # Find the common ancestor (merge-base)
+            local mb
+            mb=$(git merge-base "$ref" "$target_branch" 2>/dev/null)
             
-            # We want the candidate with the MOST RECENT common ancestor
-            if [ "$ts" -gt "$best_timestamp" ]; then
-                best_timestamp=$ts
-                best_base=$candidate_ref
+            if [ -n "$mb" ]; then
+                # Get the commit time of the merge-base (Unix timestamp)
+                local ts
+                ts=$(git show -s --format=%ct "$mb")
+                
+                # We want the candidate with the MOST RECENT common ancestor
+                if [ "$ts" -gt "$best_timestamp" ]; then
+                    best_timestamp=$ts
+                    best_base=$ref
+                fi
             fi
-        fi
+        done
     done
 
     # Fallback to 'main' if detection fails completely
