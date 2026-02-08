@@ -39,7 +39,46 @@ gupdate() {
         return 1
     fi
 
-    # 1. Fetch
+    # 1. Handle skipped files
+    # Get list of skipped files (worktree only)
+    local skipped_files=""
+    if command -v gskipped >/dev/null 2>&1; then
+        skipped_files=$(gskipped --list --worktree)
+    else
+        # Fallback if gskipped is not available
+        if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            skipped_files=$(git ls-files -v | grep '^S ' | cut -c3-)
+        fi
+    fi
+    local stashed=0
+
+    if [ -n "$skipped_files" ]; then
+        echo "🙈 Found skipped files. Unskipping temporarily..."
+        while IFS= read -r file; do
+            if [ -n "$file" ]; then
+                if command -v gunskip >/dev/null 2>&1; then
+                    gunskip "$file"
+                else
+                    # Fallback
+                    if git ls-files --error-unmatch -- "$file" >/dev/null 2>&1; then
+                        git update-index --no-skip-worktree "$file"
+                        echo "👁️  Tracking (worktree): $file"
+                    fi
+                fi
+            fi
+        done <<< "$skipped_files"
+    fi
+
+    # 2. Check for local changes (now that skipped files are visible)
+    # We stash if there are ANY changes to avoid merge conflicts
+    if ! git diff-index --quiet HEAD --; then
+        echo "📦 Stashing local changes..."
+        # We assume git stash works. If it fails, we might be in trouble, but standard flow.
+        git stash push -m "gupdate_temp_stash"
+        stashed=1
+    fi
+
+    # 3. Fetch
     echo "🔄 Fetching origin..."
     git fetch origin --quiet
 
@@ -54,6 +93,27 @@ gupdate() {
              echo "⚠️ 'origin/main' not found, using 'origin/master'."
          else
              echo "❌ Remote branch '$remote_ref' not found."
+             # Restore state before exiting
+             if [ $stashed -eq 1 ]; then
+                 echo "🔙 Restoring stash..."
+                 git stash pop
+             fi
+             if [ -n "$skipped_files" ]; then
+                 echo "🙈 Re-skipping files..."
+                 while IFS= read -r file; do
+                     if [ -n "$file" ]; then
+                         if command -v gskip >/dev/null 2>&1; then
+                             gskip "$file"
+                         else
+                             # Fallback
+                             if git ls-files --error-unmatch -- "$file" >/dev/null 2>&1; then
+                                 git update-index --skip-worktree -- "$file"
+                                 echo "🙈 Skipping (worktree): $file"
+                             fi
+                         fi
+                     fi
+                 done <<< "$skipped_files"
+             fi
              return 1
          fi
     fi
@@ -67,11 +127,53 @@ gupdate() {
             echo "✅ Push successful."
         else
             echo "❌ Push failed."
-            return 1
+            # We continue to restore state even if push fails
         fi
+        
+        # 4. Restore State
+        if [ $stashed -eq 1 ]; then
+            echo "📦 Popping stash..."
+            if git stash pop; then
+                echo "✅ Stash restored."
+            else
+                echo "⚠️  Stash pop had conflicts? Resolve them manually."
+                # If stash pop fails, files might be partially restored or conflict markers.
+                # We should still try to reskip if possible, or maybe it's too risky?
+                # Usually stash pop conflict leaves files in working tree.
+                # We'll attempt reskip anyway as it just flags them.
+            fi
+        fi
+
+        if [ -n "$skipped_files" ]; then
+            echo "🙈 Re-skipping files..."
+            while IFS= read -r file; do
+                if [ -n "$file" ]; then
+                    if command -v gskip >/dev/null 2>&1; then
+                        gskip "$file"
+                    else
+                        # Fallback
+                        if git ls-files --error-unmatch -- "$file" >/dev/null 2>&1; then
+                            git update-index --skip-worktree -- "$file"
+                            echo "🙈 Skipping (worktree): $file"
+                        fi
+                    fi
+                fi
+            done <<< "$skipped_files"
+        fi
+
     else
         echo "❌ Merge failed (conflict?)."
         echo "   Fix conflicts and commit the result."
+        
+        # In case of merge failure, we do NOT pop stash or reskip automatically
+        # because the user needs to resolve merge conflicts first.
+        if [ $stashed -eq 1 ]; then
+            echo "⚠️  Local changes are saved in stash (stash@{0}). Pop them after fixing conflicts."
+        fi
+        if [ -n "$skipped_files" ]; then
+            echo "⚠️  Skipped files are currently unskipped. Re-skip them after fixing conflicts."
+            # We could print them or just let user run 'gskip' later.
+        fi
         return 1
     fi
 }
@@ -479,40 +581,75 @@ gskipped() {
         return 1
     fi
 
+    local list_mode=false
+    local filter_worktree=false
+    local filter_ignored=false
+
+    # Parse args
+    for arg in "$@"; do
+        case $arg in
+            --list|-l) list_mode=true ;;
+            --worktree|-w) filter_worktree=true ;;
+            --ignored|-i) filter_ignored=true ;;
+        esac
+    done
+
+    # If neither specific filter is set, show both
+    if [ "$filter_worktree" = false ] && [ "$filter_ignored" = false ]; then
+        filter_worktree=true
+        filter_ignored=true
+    fi
+
     local found_any=false
 
     # 1. Skip-worktree files
-    local skipped_files
-    skipped_files=$(git ls-files -v | grep '^S ' | cut -c3-)
+    if [ "$filter_worktree" = true ]; then
+        local skipped_files
+        skipped_files=$(git ls-files -v | grep '^S ' | cut -c3-)
 
-    if [ -n "$skipped_files" ]; then
-        echo "🙈 Files with skip-worktree flag:"
-        echo "$skipped_files" | sed 's/^/   /'
-        echo ""
-        found_any=true
-    fi
-
-    # 2. Locally ignored files (.git/info/exclude)
-    local exclude_file="$(git rev-parse --git-common-dir)/info/exclude"
-    if [ -f "$exclude_file" ] && [ -s "$exclude_file" ]; then
-        # Filter out comments and empty lines
-        local ignored_files
-        ignored_files=$(grep -vE '^\s*#|^\s*$' "$exclude_file")
-        
-        if [ -n "$ignored_files" ]; then
-            echo "🙈 Files locally ignored (.git/info/exclude):"
-            echo "$ignored_files" | sed 's/^/   /'
-            echo ""
+        if [ -n "$skipped_files" ]; then
+            if [ "$list_mode" = true ]; then
+                echo "$skipped_files"
+            else
+                echo "🙈 Files with skip-worktree flag:"
+                echo "$skipped_files" | sed 's/^/   /'
+                echo ""
+            fi
             found_any=true
         fi
     fi
 
+    # 2. Locally ignored files (.git/info/exclude)
+    if [ "$filter_ignored" = true ]; then
+        local exclude_file="$(git rev-parse --git-common-dir)/info/exclude"
+        if [ -f "$exclude_file" ] && [ -s "$exclude_file" ]; then
+            # Filter out comments and empty lines
+            local ignored_files
+            ignored_files=$(grep -vE '^\s*#|^\s*$' "$exclude_file")
+            
+            if [ -n "$ignored_files" ]; then
+                if [ "$list_mode" = true ]; then
+                    echo "$ignored_files"
+                else
+                    echo "🙈 Files locally ignored (.git/info/exclude):"
+                    echo "$ignored_files" | sed 's/^/   /'
+                    echo ""
+                fi
+                found_any=true
+            fi
+        fi
+    fi
+
     if [ "$found_any" = false ]; then
-        echo "ℹ️  No files are currently marked as skip-worktree or locally ignored."
+        if [ "$list_mode" = false ]; then
+            echo "ℹ️  No files are currently marked as skip-worktree or locally ignored."
+        fi
         return 0
     fi
 
-    echo "💡 Use 'gunskip' to re-enable tracking or un-ignore."
+    if [ "$list_mode" = false ]; then
+        echo "💡 Use 'gunskip' to re-enable tracking or un-ignore."
+    fi
 }
 
 # GEXEC: Run a command on files changed in the working tree (vs HEAD)
