@@ -24,6 +24,33 @@ _require_user_ide() {
   return 0
 }
 
+# Helper: Check disk space
+# Usage: _check_disk_space [path]
+_check_disk_space() {
+  local check_path="${1:-.}"
+  
+  # Ensure the directory exists for df to work
+  if [ ! -d "$check_path" ]; then
+    mkdir -p "$check_path" 2>/dev/null || return 0 # If we can't create it, we can't check it easily, so skip
+  fi
+
+  # Get available space in KB
+  local available_kb=$(df -P "$check_path" | tail -1 | awk '{print $4}')
+  
+  # 1GB in KB = 1048576
+  local min_space_kb=1048576
+  
+  if [ "$available_kb" -lt "$min_space_kb" ]; then
+    local available_human=$(df -h "$check_path" | tail -1 | awk '{print $4}')
+    echo "❌ Error: Low disk space! Only $available_human available on $(df -P "$check_path" | tail -1 | awk '{print $6}')."
+    echo "   Minimum required: 1GB."
+    echo "   Please clear some space before creating a new worktree."
+    return 1
+  fi
+  
+  return 0
+}
+
 # Helper: Select a worktree using fzf
 # Usage: _select_worktree "header text" [skip_first_line]
 # Returns the selected worktree path (first column), empty if cancelled
@@ -235,6 +262,9 @@ wta() {
 
   # Ensure the parent directory exists
   mkdir -p "$(dirname "$target_dir")"
+
+  # Check available disk space before proceeding
+  _check_disk_space "$(dirname "$target_dir")" || return 1
 
   # STRATEGY 1: Try to add as an EXISTING branch (local or remote-tracking)
   # Check: exact input, slug, or $GITHUB_USER/slug

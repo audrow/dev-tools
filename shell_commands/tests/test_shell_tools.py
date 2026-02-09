@@ -638,6 +638,44 @@ class TestShellTools(unittest.TestCase):
         self.assertEqual(res.returncode, 1)
         self.assertIn("Error: GITHUB_USER environment variable is not set", res.stdout)
 
+    def test_wta_fails_on_low_disk_space(self):
+        """Test that wta fails when available disk space is low (<1GB)."""
+        self.setup_repo()
+
+        # Mock df to return low space (500KB)
+        # We define a function 'df' that shadows the system df command
+        # The output format mimics 'df -P' (POSIX portability option)
+        # Columns: Filesystem Blocks Used Available Capacity Mounted
+        mock_df = 'df() { echo "Filesystem 1024-blocks Used Available Capacity Mounted on"; echo "/dev/mock 10000000 9000000 500 90% /"; }'
+
+        # Run wta with the mocked df
+        res = self.run_bash(f"{mock_df}; wta new-feature", input_text="n\\n")
+
+        self.assertEqual(
+            res.returncode,
+            1,
+            f"wta should have failed.\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}",
+        )
+        self.assertIn("Error: Low disk space!", res.stdout)
+        self.assertIn("Minimum required: 1GB", res.stdout)
+
+    def test_wta_succeeds_with_enough_disk_space(self):
+        """Test that wta proceeds when disk space is sufficient (>1GB)."""
+        self.setup_repo()
+
+        # Mock df to return sufficient space (2GB)
+        mock_df = 'df() { echo "Filesystem 1024-blocks Used Available Capacity Mounted on"; echo "/dev/mock 10000000 5000000 2000000 50% /"; }'
+
+        # Run wta with mocked df
+        res = self.run_bash(f"{mock_df}; wta new-feature", input_text="n\\n")
+
+        self.assertEqual(
+            res.returncode,
+            0,
+            f"wta should have succeeded. Output:\n{res.stdout}\nSTDERR:\n{res.stderr}",
+        )
+        self.assertIn("Created new branch", res.stdout)
+
     def test_wta_existing_branch_checkout_by_default(self):
         """Test that wta checks out existing branch when not forcing recreate."""
         self.setup_repo()

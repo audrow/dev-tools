@@ -171,5 +171,25 @@ else
     [ -f "$SCRIPT_DIR/python_tools.sh" ] && source "$SCRIPT_DIR/python_tools.sh"
 fi
 
+# Alert if disk usage is over 80% (only in interactive terminals)
+_check_disk_usage_startup() {
+    # Only check in interactive terminal to avoid breaking scripts/tests
+    if [ ! -t 1 ]; then
+        return 0
+    fi
+
+    local disk_usage
+    if command -v df >/dev/null 2>&1; then
+        # Use df -P for portability (avoids line wrapping), tail -1 for last line
+        disk_usage=$(df -P / | tail -1 | awk '{print $5}' | tr -d '%')
+        
+        if [ -n "$disk_usage" ] && [ "$disk_usage" -gt 80 ]; then
+             printf "\033[1;31m⚠️  WARNING: Disk usage is at %s%%. Run 'bazel clean --expunge' soon!\033[0m\n" "$disk_usage"
+        fi
+    fi
+}
+_check_disk_usage_startup
+unset -f _check_disk_usage_startup
+
 # Explicitly return true to ensure source init.sh doesn't fail if the last command failed
 true
