@@ -127,13 +127,13 @@ class TestShellTools(unittest.TestCase):
 
     def test_wta_create_detached_worktree(self):
         self.setup_repo()
-        
+
         # wta "detached-test" -> No branch creation (n), No clipboard (n)
         res = self.run_bash("wta detached-test", input_text="n\nn\n")
 
         self.assertEqual(res.returncode, 0, f"wta failed: {res.stderr}")
         self.assertIn("Creating detached worktree", res.stdout)
-        
+
         # Verify worktree created
         res_wt = subprocess.run(
             ["git", "worktree", "list"],
@@ -142,16 +142,21 @@ class TestShellTools(unittest.TestCase):
             text=True,
         )
         self.assertIn("detached-test", res_wt.stdout)
-        
+
         # Verify NO branch created (HEAD detached)
-        worktree_path = Path(self.test_dir) / ".worktrees" / os.path.basename(self.test_dir) / "detached-test"
-        
+        worktree_path = (
+            Path(self.test_dir)
+            / ".worktrees"
+            / os.path.basename(self.test_dir)
+            / "detached-test"
+        )
+
         # Check if HEAD is detached (symbolic-ref fails on detached HEAD)
         res_head = subprocess.run(
             ["git", "symbolic-ref", "-q", "HEAD"],
             cwd=worktree_path,
             capture_output=True,
-            text=True
+            text=True,
         )
         self.assertNotEqual(res_head.returncode, 0, "HEAD should be detached")
 
@@ -897,7 +902,6 @@ class TestShellTools(unittest.TestCase):
         res = self.run_bash("text-aggregator --help")
         self.assertEqual(res.returncode, 0, f"text-aggregator failed: {res.stderr}")
         self.assertIn("usage: aggregator.py", res.stdout)
-
 
 
 class TestZshCompatibility(unittest.TestCase):

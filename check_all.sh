@@ -4,6 +4,9 @@ set -e
 # Ensure we are in the repo root
 cd "$(dirname "$0")"
 
+# Unset any potential python3 function wrapper (e.g. gpkg)
+unset -f python3 || true
+
 # Setup/Activate venv
 if [ ! -d ".venv" ]; then
     echo "📦 Creating .venv..."
