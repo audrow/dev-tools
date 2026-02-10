@@ -892,6 +892,13 @@ class TestShellTools(unittest.TestCase):
             result.returncode, 0, f"Commit should work after unlock: {result.stderr}"
         )
 
+    def test_text_aggregator_help(self):
+        """Test that text-aggregator command runs (verifies dependencies)."""
+        res = self.run_bash("text-aggregator --help")
+        self.assertEqual(res.returncode, 0, f"text-aggregator failed: {res.stderr}")
+        self.assertIn("usage: aggregator.py", res.stdout)
+
+
 
 class TestZshCompatibility(unittest.TestCase):
     """Tests that shell tools work when sourced from zsh."""

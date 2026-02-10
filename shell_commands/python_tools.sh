@@ -16,29 +16,50 @@ fi
 
 DEV_TOOLS_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# Helper to find the best python interpreter
+# Usage: _get_venv_python <tool_dir>
+_get_venv_python() {
+    local tool_dir="$1"
+    local tool_venv="$tool_dir/venv/bin/python3"
+    local tool_pip="$tool_dir/venv/bin/pip"
+    local root_venv="$DEV_TOOLS_ROOT/.venv/bin/python3"
+
+    # 1. Prefer tool-specific venv if it seems complete (has pip)
+    if [ -f "$tool_venv" ] && [ -f "$tool_pip" ]; then
+        echo "$tool_venv"
+        return 0
+    fi
+
+    # 2. Fallback to root repo venv
+    if [ -f "$root_venv" ]; then
+        echo "$root_venv"
+        return 0
+    fi
+
+    # 3. Fallback to system python
+    echo "python3"
+}
+
 # --- Text Aggregator ---
 function text-aggregator() {
     local TOOL_DIR="$DEV_TOOLS_ROOT/text_aggregator_tool"
-    local VENV_PYTHON="$TOOL_DIR/venv/bin/python3"
+    local PYTHON_CMD=$(_get_venv_python "$TOOL_DIR")
 
-    if [ -f "$VENV_PYTHON" ]; then
-        # Use venv if available
-        PYTHONPATH="$TOOL_DIR" "$VENV_PYTHON" -m text_aggregator.aggregator "$@"
-    else
-        # Fallback to system python (might fail if dependencies missing)
-        PYTHONPATH="$TOOL_DIR" python3 -m text_aggregator.aggregator "$@"
-    fi
+    PYTHONPATH="$TOOL_DIR" "$PYTHON_CMD" -m text_aggregator.aggregator "$@"
 }
 
 # --- Command Reloader ---
 function command-reloader() {
     local TOOL_DIR="$DEV_TOOLS_ROOT/command_reloader_tool"
-    # No dependencies, system python is usually fine
-    PYTHONPATH="$TOOL_DIR" python3 -m command_reloader.reloader "$@"
+    local PYTHON_CMD=$(_get_venv_python "$TOOL_DIR")
+    
+    PYTHONPATH="$TOOL_DIR" "$PYTHON_CMD" -m command_reloader.reloader "$@"
 }
 function cr() { command-reloader "$@"; }
 
 function command-trigger-listener() {
     local TOOL_DIR="$DEV_TOOLS_ROOT/command_reloader_tool"
-    PYTHONPATH="$TOOL_DIR" python3 -m command_reloader.listener "$@"
+    local PYTHON_CMD=$(_get_venv_python "$TOOL_DIR")
+    
+    PYTHONPATH="$TOOL_DIR" "$PYTHON_CMD" -m command_reloader.listener "$@"
 }
