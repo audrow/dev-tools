@@ -85,6 +85,7 @@ wta <description|branch-name> [--base|-b base-branch]
 **Features:**
 - **Auto-fetch**: Fetches latest from all remotes before creating
 - **Smart branch naming**: Converts descriptions to slugs and prefixes with `$GITHUB_USER/`
+- **Detached worktree**: Option to create a detached worktree (no branch) if you answer 'No' to branch creation.
 - **Existing branch handling**: If branch exists, prompts to checkout existing or force recreate
 - **Copies all `.env*` files**: Copies `.env`, `.env.local`, `.env.development`, etc.
 - **Symlinks `node_modules`**: If `node_modules` exists, it's symlinked (faster than copying)
@@ -115,6 +116,11 @@ cp .env.example .env.local
 ```bash
 # Create worktree for "add login feature" -> branch: youruser/add-login-feature
 wta "add login feature"
+
+# Create a detached worktree (useful for quick checks)
+wta "quick-check"
+# Prompts: Create new branch 'youruser/quick-check' (from origin/main)? [Y/n] n
+# -> Creates worktree at detached HEAD
 
 # Create worktree based on a different branch
 wta "hotfix" --base release/v2
