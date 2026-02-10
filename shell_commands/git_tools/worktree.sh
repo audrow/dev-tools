@@ -328,23 +328,38 @@ wta() {
       fi
   fi
 
-  echo "Branch '$new_branch_name' not found. Creating new branch off $remote_base..."
-  
-  # Note: --no-track ensures the new branch does NOT track origin/main (avoiding the bug where push goes to main)
-  # But only if we are branching off a remote.
-  local track_flag=""
-  if [[ "$remote_base" == origin/* ]]; then
-      track_flag="--no-track"
-  fi
+  echo "Branch '$new_branch_name' not found."
 
-  if git worktree add "$target_dir" -b "$new_branch_name" "$remote_base" $track_flag; then
-    echo "✨ Created new branch: $new_branch_name (based on $remote_base)"
-    echo "📂 Worktree: $target_dir"
-    _wta_setup_worktree "$main_repo_path" "$target_dir"
-    return 0
+  if _prompt_yn "Create new branch '$new_branch_name' (from $remote_base)?" "Y"; then
+    echo "Creating new branch off $remote_base..."
+    
+    # Note: --no-track ensures the new branch does NOT track origin/main (avoiding the bug where push goes to main)
+    # But only if we are branching off a remote.
+    local track_flag=""
+    if [[ "$remote_base" == origin/* ]]; then
+        track_flag="--no-track"
+    fi
+
+    if git worktree add "$target_dir" -b "$new_branch_name" "$remote_base" $track_flag; then
+      echo "✨ Created new branch: $new_branch_name (based on $remote_base)"
+      echo "📂 Worktree: $target_dir"
+      _wta_setup_worktree "$main_repo_path" "$target_dir"
+      return 0
+    else
+      echo "❌ Failed to create worktree."
+      return 1
+    fi
   else
-    echo "❌ Failed to create worktree."
-    return 1
+    echo "Creating detached worktree at $remote_base..."
+    if git worktree add --detach "$target_dir" "$remote_base"; then
+      echo "✨ Created detached worktree at $remote_base"
+      echo "📂 Worktree: $target_dir"
+      _wta_setup_worktree "$main_repo_path" "$target_dir"
+      return 0
+    else
+      echo "❌ Failed to create worktree."
+      return 1
+    fi
   fi
 }
 
